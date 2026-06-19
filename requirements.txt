@@ -1,11 +1,6 @@
 numpy
+cupy-cuda12x
 matplotlib
+psutil
 
-# pytest
-
-# torch --index-url https://download.pytorch.org/whl/cu126
-# torchvision --index-url https://download.pytorch.org/whl/cu126
-
-# cupy
-# nccl
-# cutensor
+pandas
