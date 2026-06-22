@@ -1,5 +1,5 @@
 from .Neurona import Neurona
-from .Red_de_neuronas import Red_de_neuronas
+from .RedDeNeuronas import RedDeNeuronas
 import time
 import numpy as np
 import cupy as cp
@@ -16,7 +16,7 @@ class Simulador:
         self.pasos_totales = self.dt * self.tiempo_total
         self.registro = []
 
-    def cargar_red(self, red: Red_de_neuronas) -> None:
+    def cargar_red(self, red: RedDeNeuronas) -> None:
         """
         """
         self.es_red = True
