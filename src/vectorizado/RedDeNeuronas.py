@@ -1,9 +1,12 @@
 import cupy as cp
 import numpy as np
+import scipy.sparse as sp
+import cupyx.scipy.sparse as cpsp
 from .Neurona import Neurona
 from typing import TypeAlias, Literal
 
 Array: TypeAlias = np.ndarray | cp.ndarray
+SparseArray: TypeAlias = sp.csr_matrix | cpsp.csr_matrix
 
 class RedDeNeuronas:
     """
@@ -21,8 +24,9 @@ class RedDeNeuronas:
         Indica de forma directa si se utiliza la GPU como backend o, por el contrario, la CPU.
     neuronas : dict[Neurona, int]
         Tipos de neuronas y su cantidad en la red.
-    conexiones : Array
-        Matriz cuadrada de pesos sinápticos con diagonal cero.
+    conexiones : Array | SparseArray
+        Matriz de pesos sinápticos con diagonal cero. Puede almacenarse como una matriz densa o
+        mediante una representación dispersa CSR.
     num_neuronas : int
         Número total de neuronas en la red.
     num_conexiones : int
@@ -32,12 +36,15 @@ class RedDeNeuronas:
     parametros : dict[str, Array]
         Parámetros del modelo Izhikevich (a, b, c, d) para todas las neuronas.
     dtype : np.dtype | cp.dtype
-        Tipo de dato utilizado internamente por los arrays de la red. Puede ser float16, float32 o
+        Tipo de dato utilizado internamente por los arrays de la red. Puede ser float32 o
         float64 según la precisión seleccionada en el constructor.
+    sparse: bool
+        Indica si la matriz de conexiones se almacena utilizando una representación dispersa CSR.
     """
 
     def __init__(self, neuronas: dict[Neurona, int], conexiones: Array | list[list[float]] | int,
-                 backend: Literal["numpy", "cupy"] = "numpy", precision: Literal[16, 32, 64] = 32):
+                 backend: Literal["numpy", "cupy"] = "numpy", precision: Literal[32, 64] = 32,
+                 sparse: bool = True):
         """
         Inicializa una instancia de la clase RedDeNeuronas con un conjunto de neuronas y sus conexiones.
 
@@ -51,9 +58,11 @@ class RedDeNeuronas:
             conexiones de la neurona actual; o un entero que indica el número de conexiones aleatorias a crear.
         backend : Literal["numpy", "cupy"], optional
             Nombre del backend a utilizar. Utilizar "numpy" para CPU o "cupy" para GPU.
-        precision : Literal[16, 32, 64], optional
+        precision : Literal[32, 64], optional
             Tamaño, en bits, en el que se guardan los valores de los arrays. La precisión por defecto es 32 bits
             (float32).
+        sparse : bool, optional
+            Indica si la matriz de conexiones se almacena utilizando una representación CSR dispersa. Por defecto es True.
 
         Raises
         ------
@@ -64,21 +73,22 @@ class RedDeNeuronas:
 
         if backend == "numpy":
             self.__xp = np
+            self.__sp = sp
         elif backend == "cupy":
             self.__xp = cp
+            self.__sp = cpsp
         else:
             raise ValueError("El parámetro 'backend' debe ser 'numpy' o 'cupy'.")
         
         self.__uso_gpu = backend == "cupy"
+        self.__sparse = sparse
 
-        if precision == 16:
-            self.__dtype = self.__xp.float16
-        elif precision == 32:
+        if precision == 32:
             self.__dtype = self.__xp.float32
         elif precision == 64:
             self.__dtype = self.__xp.float64
         else:
-            raise ValueError("El dtype debe ser 16, 32 o 64.")
+            raise ValueError("El dtype debe ser 32 o 64.")
                 
         for cantidad in neuronas.values():
             if not isinstance(cantidad, int) or cantidad < 0:
@@ -113,23 +123,32 @@ class RedDeNeuronas:
 
         if isinstance(conexiones, int):
             self.__crear_conexiones_aleatorias(conexiones)
-            self.__num_conexiones = conexiones
         elif isinstance(conexiones, list):
-            self.__conexiones = self.__xp.asarray(conexiones, dtype=self.__dtype)
+            if self.__sparse:
+                self.__conexiones = self.__sp.csr_matrix(conexiones, dtype=self.__dtype)
+            else:
+                self.__conexiones = self.__xp.asarray(conexiones, dtype=self.__dtype)
+
         elif isinstance(conexiones, (np.ndarray, cp.ndarray)):
-            self.__conexiones = self.__xp.asarray(conexiones, dtype=self.__dtype)
+            if self.__sparse:
+                self.__conexiones = self.__sp.csr_matrix(conexiones, dtype=self.__dtype)
+            else:
+                self.__conexiones = self.__xp.asarray(conexiones, dtype=self.__dtype)
         else:
             raise ValueError("El parámetro 'conexiones' debe ser un entero, una matriz formada por listas \
                              o un array en forma de matriz cuadrada.")
         
-        if not isinstance(conexiones, int):
-            self.__num_conexiones = int(self.__xp.count_nonzero(self.__conexiones))
-        
         if self.__conexiones.shape != (self.__num_neuronas, self.__num_neuronas):
             raise ValueError("Dimensiones incorrectas.")
 
-        if self.__xp.any(self.__xp.diag(self.__conexiones)):
-            raise ValueError("La diagonal debe ser cero.")
+        if self.__sparse:
+            if self.__conexiones.diagonal().any():
+                raise ValueError("La diagonal debe ser cero.")
+        else:
+            if self.__xp.any(self.__xp.diag(self.__conexiones)):
+                raise ValueError("La diagonal debe ser cero.")
+
+        self.__num_conexiones = self.__conexiones.nnz if self.__sparse else int(self.__xp.count_nonzero(self.__conexiones))
 
 
     def __crear_conexiones_aleatorias(self, num:int) -> None:
@@ -149,41 +168,63 @@ class RedDeNeuronas:
         
         xp = self.__xp
 
-        # Inicializar matriz
-        self.__conexiones = xp.zeros((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
-
         # Máximo número de conexiones posibles (sin diagonal)
         max_conexiones = self.__num_neuronas * (self.__num_neuronas - 1)
-        if num > max_conexiones:
+
+        if num < 0:
+            raise ValueError("La cantidad de conexiones a crear debe ser un entero positivo.")
+        elif num > max_conexiones:
             raise ValueError(
                 f"No se pueden crear {num} conexiones. "
                 f"Máximo permitido: {max_conexiones}"
             )
-        elif num < 0:
-            raise ValueError("La cantidad de conexiones a crear debe ser un entero positivo.")
-        elif num > 0:
-            # Seleccionar posiciones aleatorias fuera de la diagonal
-            posibles = xp.arange(max_conexiones)
+        
+        # Caso sin conexiones
+        if num == 0:
+            if self.__sparse:
+                self.__conexiones = self.__sp.csr_matrix((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
+            else:
+                self.__conexiones = xp.zeros((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
+            return
+        
+        # Seleccionar posiciones aleatorias fuera de la diagonal
+        posibles = xp.arange(max_conexiones)
 
-            seleccion = xp.random.choice(posibles, size=num, replace=False)
+        seleccion = xp.random.choice(
+            posibles,
+            size=num,
+            replace=False
+        )
 
-            # Convertir índices lineales → (fila, columna)
-            filas = seleccion // (self.__num_neuronas - 1)
-            columnas = seleccion % (self.__num_neuronas - 1)
+        # Convertir índices lineales → (fila, columna)
+        filas = seleccion // (self.__num_neuronas - 1)
+        columnas = seleccion % (self.__num_neuronas - 1)
 
-            # Ajustar para saltar diagonal
-            columnas = xp.where(columnas >= filas, columnas + 1, columnas)
+        # Ajustar para saltar diagonal
+        columnas = xp.where(
+            columnas >= filas,
+            columnas + 1,
+            columnas
+        )
 
-            # Generar pesos según tipo de neurona presináptica (columnas)
-            pesos = xp.random.random(num).astype(self.__dtype)
+        # Generar pesos según tipo de neurona presináptica (columnas)
+        pesos = xp.random.random(num).astype(self.__dtype)
 
-            pesos = xp.where(
-                self.__tipo[columnas],   # excitatoria o inhibitoria
-                pesos,                   # [0,1)
-                -pesos                   # (-1,0]
-            )
+        pesos = xp.where(
+            self.__tipo[columnas],
+            pesos,
+            -pesos
+        )
 
-            # Asignar conexiones
+        if self.__sparse:
+            # Crear directamente CSR sin pasar por matriz densa
+            self.__conexiones = self.__sp.csr_matrix((pesos, (filas, columnas)),
+                                                     shape=(self.__num_neuronas, self.__num_neuronas), 
+                                                     dtype=self.__dtype)
+        
+        else:
+            # Crear matriz densa
+            self.__conexiones = xp.zeros((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
             self.__conexiones[filas, columnas] = pesos
 
 
@@ -238,10 +279,10 @@ class RedDeNeuronas:
         if dt <= 0:
             raise ValueError("El paso temporal debe ser positivo.")
 
-        I_total = self.__xp.dot(self.__conexiones, es_spike) + I
-
         # cambiar dt al dtype interno, para evitar que se haga promoción dentro de los arrays de v y de u a float64.
         dt = self.__dtype.type(dt)
+
+        I_total = self.__conexiones.dot(es_spike.astype(self.__dtype)) + I
 
         # Evitar asignaciones intermedias de elevar al cuadrado haciendo la multiplicación directamente
         self.__v += dt * ((0.04 * self.__v * self.__v + 5 * self.__v + 140 - self.__u + I_total))
@@ -379,13 +420,13 @@ class RedDeNeuronas:
         return self.__neuronas.copy()
 
     @property
-    def conexiones(self) -> Array:
+    def conexiones(self) -> Array | SparseArray:
         """
         Obtiene la matriz de pesos sinápticos de la red.
 
         Returns
         -------
-        Array
+        Array | SparseArray
             Matriz cuadrada de tamaño num_neuronas x num_neuronas donde cada valor representa
             el peso de la conexión de una neurona presináptica (columnas) a una postsináptica (filas).
             La diagonal es siempre cero.
@@ -417,13 +458,25 @@ class RedDeNeuronas:
         return self.__num_conexiones
     
     @property
-    def dtype(self) -> np.dtype | cp.dtype:
+    def dtype(self) -> type[np.floating] | type[cp.floating]:
         """
         Tipo de dato utilizado internamente por la red.
 
         Returns
         -------
-        np.dtype | cp.dtype
+        type[np.floating] | type[cp.floating]
             Tipo de dato interno utilizado por los arrays de la red (por ejemplo np.float32 o cp.float32).
         """
         return self.__dtype
+    
+    @property
+    def sparse(self) -> bool:
+        """
+        Indica si las conexiones utilizan una representación dispersa CSR.
+
+        Returns
+        -------
+        bool
+            True si la matriz de conexiones está almacenada como sparse CSR.
+        """
+        return self.__sparse
