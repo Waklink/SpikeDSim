@@ -3,6 +3,7 @@ import numpy as np
 import cupy as cp
 from typing import Literal
 from pathlib import Path
+from numbers import Real
 
 from .Neurona import Neurona
 from .RedDeNeuronas import RedDeNeuronas, Array
@@ -48,9 +49,16 @@ class Simulador:
         
         Raises
         ------
+        TypeError
+            Si el paso temporal no es un número real.
+
         ValueError
             Si el paso temporal proporcionado es negativo o igual a 0.
         """
+
+        if not isinstance(paso_temporal, Real):
+            raise TypeError("El paso temporal debe ser un número Real.")
+
         if paso_temporal <= 0:
             raise ValueError("El paso temporal debe ser positivo.")
 
@@ -128,16 +136,21 @@ class Simulador:
         ----------
         pasos : int, optional
             Número de pasos a simular. Por defecto se simularán 1000 pasos.
+
         I : float | Array
             Corriente de entrada para las neuronas.
+
         guardar_resultados : bool
             Decisión de si guardar el histórico al terminar la simulación o no.
+
         path_guardado : str | None, optional
             Path al archivo donde guardar los resultados ene l caso de que guardar_resultados sea True.
             Si no se especifica, entonces se usará "./historico.npz", el valor por defecto de la función
             guardar_historico().
+
         verbose : bool
             Determinar si imprimir valores de rendimiento por pantalla.
+
         tamano_batch : int, optional
             Número de pasos temporales que se almacenan en GPU antes de transferirlos conjuntamente a la
             memoria RAM. Solo se aplica cuando el backend usado es CuPy.
@@ -150,15 +163,28 @@ class Simulador:
         
         Raises
         ------
+        TypeError
+            Si los pasos o el tamaño del batch de gpu no son enteros.
+
         ValueError
             Si no hya nada cargado, o si los pasos a simular son negativos.
         """
+
         if self.__red is None:
             raise ValueError("No hay ninguna red o neurona cargada para simular.")
+        
+        if not isinstance(pasos, int):
+            raise TypeError("Los pasos deben ser un entero.")
+        
         if pasos < 0:
-            raise ValueError("Los pasos a simular deben ser un entero positivo.")
+            raise ValueError("Los pasos a simular deben ser un entero positivo o 0, para solo guardar \
+                             el estado actual en el histórico.")
+        
+        if not isinstance(tamano_batch, int):
+            raise TypeError("El tamaño del batch de gpu debe ser un entero.")
+        
         if tamano_batch <= 0:
-            raise ValueError("El tamaño del batch debe ser positivo.")
+            raise ValueError("El tamaño del batch debe ser un entero positivo.")
         
         # 1. Crear referencias locales de los atributos usados, para evitar búsqueda de atributos.
         historico_v = self.__historico_v
@@ -184,14 +210,13 @@ class Simulador:
 
         # 3. Guardar el estado inicial si estamos en el paso cero
         if paso_actual == 0:
-            est = red.estado
-            # Convertir a numpy de forma segura tanto si viene de CPU como de GPU (.get())
-            historico_v[0] = est["v"].get() if hasattr(est["v"], "get") else np.array(est["v"])
-            historico_u[0] = est["u"].get() if hasattr(est["u"], "get") else np.array(est["u"])
+            v_actual, u_actual = red._estado()
+            historico_v[0] = np.asarray(v_actual)
+            historico_u[0] = np.asarray(u_actual)
             paso_actual += 1
             
             # Si solo queríamos registrar el estado inicial (pasos=0), salimos
-            if pasos == 0: return
+            if pasos == 0: return 0
 
         # 4. Determinar si la red interna está usando GPU (CuPy) o CPU (NumPy)
         red_usa_gpu = red.uso_gpu
@@ -205,8 +230,6 @@ class Simulador:
         # 6. Bucle Temporal de Simulación
         # Duplicación para evitar la comprobación del if en cada paso del bucle.
         if red_usa_gpu:
-            tamano_batch = 100
-
             buffer_v_gpu = cp.empty((tamano_batch, self.__num_neuronas), dtype=red.dtype)
             buffer_u_gpu = cp.empty((tamano_batch, self.__num_neuronas), dtype=red.dtype)
 

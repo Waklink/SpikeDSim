@@ -1,3 +1,4 @@
+from numbers import Real
 
 class Neurona:
     """
@@ -12,12 +13,15 @@ class Neurona:
     estado : tuple[float, float]
         Estado actual de la neurona como (v, u), donde v es el potencial de membrana y u es la
         variable de recuperación.
+
     parametros : tuple[float, float, float, float]
         Parámetros del modelo Izhikevich como (a, b, c, d), donde a representa la velocidad de
         recuperación, b la sensibilidad al estímulo, c el potencial de recuperación después de un
         disparo y d el incremento de la variable de recuperación después de un disparo.
+
     tipo : str
         Tipo de la neurona, puede ser un tipo predefinido (RS, IB, CH, FS, LTS, TC o RZ) o personalizado.
+
     es_excitatoria : bool
         Indica si la neurona es excitatoria (True) o inhibitoria (False).
     """
@@ -32,29 +36,58 @@ class Neurona:
         ----------
         a : float
             Parámetro que regula la velocidad de recuperación de la neurona.
+
         b : float
             Parámetro que regula la sensibilidad de la neurona al estímulo.
+
         c : int | float
             Parámetro que regula el potencial de membrana de recuperación.
+
         d : int | float
             Parámetro que regula la velocidad de recuperación de la variable de recuperación.
+
         v_inicial : int | float, optional
             Potencial de membrana inicial de la neurona. Por defecto es -65 mV.
+
         u_inicial : int | float, optional
             Variable de recuperación inicial de la neurona. Por defecto se calcula como b * v_inicial.
+
         tipo : str
             Tipo de la neurona.
+
         es_excitatoria : bool
             Indica si la neurona es excitatoria (True) o inhibitoria (False).
+        
+        Raises
+        ------
+        TypeError
+            Si alguno de los parámetros pasados no son del tipo correcto, los números deben ser reales,
+            el tipo un string y es_excitatoria un booleano.
         """
+        if not (isinstance(a, Real) and isinstance(b, Real) and isinstance(c, Real) and isinstance(d, Real)):
+            raise TypeError("Los parámetros deben ser números reales.")
 
         self.__a = a
         self.__b = b
         self.__c = c
         self.__d = d
 
+        if not isinstance(tipo, str):
+            raise TypeError("El tipo de neurona debe ser un string con un nombre que represente a la neurona.")
+        
+        if not isinstance(es_excitatoria, bool):
+            raise TypeError("El parámetro es_excitatoria debe ser un booleano que representa si la neurona \
+                            es excitatoria o inhibitoria.")
+
         self.__tipo = tipo
         self.__es_excitatoria = es_excitatoria
+
+        if not isinstance(v_inicial, Real):
+            raise TypeError("El potencial de membrana inicial, v_inicial, debe ser un número real.")
+        
+        if u_inicial is not None and not isinstance(u_inicial, Real):
+            raise TypeError("La variable de recuperación inicial, u_inicial, debe ser un número real o None, \
+                            para que se calcule automáticamente.")
 
         self.__v = v_inicial
         
@@ -120,8 +153,10 @@ class Neurona:
             RS (Regular Spiking), IB (Intrinsically Bursting), CH (Chattering), FS (Fast Spiking),
             LTS (Low Threshold Spiking), TC (Thalamo Cortical), RZ (Resonator).
             Se aceptan variantes en minúsculas y con '-' en lugar de espacios.
+
         v_inicial : int | float, optional
             Potencial de membrana inicial de la neurona. Por defecto es -65 mV.
+
         u_inicial : int | float, optional
             Variable de recuperación inicial de la neurona. Por defecto se calcula como b * v_inicial.
 
@@ -132,15 +167,29 @@ class Neurona:
 
         Raises
         ------
+        TypeError
+            Si el tipo no es un string o los valores de estado iniciales no son números reales, y,
+            en el caso de u_inicial, tampoco es None.
+
         ValueError
             Si el tipo de neurona no es reconocido.
         """
+
+        if not isinstance(tipo, str):
+            raise TypeError("El tipo de neurona debe ser un string con un nombre que represente a la neurona.")
+        
+        if not isinstance(v_inicial, Real):
+            raise TypeError("El potencial de membrana inicial, v_inicial, debe ser un número real.")
+        
+        if u_inicial is not None and not isinstance(u_inicial, Real):
+            raise TypeError("La variable de recuperación inicial, u_inicial, debe ser un número real o None, \
+                            para que se calcule automáticamente.")
 
         tipo = tipo.strip().lower()
         
         if tipo not in cls._ALIAS:
             raise ValueError(f"El tipo {tipo} no existe, por favor use un valor predefinido o cree \
-                                una neurona personalizada con el constructor")
+                                una neurona personalizada con el constructor.")
         
         tipo = cls._ALIAS[tipo]
         a, b, c, d, nombre, es_excitatoria = cls._TIPOS[tipo]
@@ -161,6 +210,7 @@ class Neurona:
         ----------
         I : float
             Corriente de entrada.
+
         dt : float
             Paso temporal de simulación. Debe ser positivo.
 
@@ -171,9 +221,19 @@ class Neurona:
 
         Raises
         ------
+        TypeError
+            Si I o dt no son números reales.
+
         ValueError
             Si dt es menor o igual a 0.
         """
+
+        if not isinstance(I, Real):
+            raise TypeError("La corriente de entrada debe ser un número real.")
+        
+        if not isinstance(dt, Real):
+            raise TypeError("El paso temporal tiene que ser un número real.")
+        
 
         if dt <= 0:
             raise ValueError("El paso temporal tiene que ser positivo.")
@@ -208,23 +268,24 @@ class Neurona:
         ----------
         v : float | int | None, optional
             Nuevo valor del potencial de membrana. Si es None, no se modifica v.
+
         u : float | int | None, optional
             Nuevo valor de la variable de recuperación. Si es None, no se modifica u.
 
         Raises
         ------
-        ValueError
+        TypeError
             Si alguno de los valores pasados no es un número real.
         """
         if v is not None:
-            if not isinstance(v, (float, int)):
-                raise ValueError("El potencial de membrana, v, pasado debe ser un número real.")
+            if not isinstance(v, Real):
+                raise TypeError("El potencial de membrana, v, pasado debe ser un número real.")
             
             self.__v = v
         
         if u is not None:
-            if not isinstance(u, (float, int)):
-                raise ValueError("La varialbe de recuperación, u, pasada debe ser un número real.")
+            if not isinstance(u, Real):
+                raise TypeError("La variable de recuperación, u, pasada debe ser un número real.")
             
             self.__u = u
 
