@@ -26,7 +26,8 @@ class RedDeNeuronas:
         Indica de forma directa si se utiliza la GPU como backend o, por el contrario, la CPU.
 
     neuronas : dict[Neurona, int]
-        Tipos de neuronas y su cantidad en la red.
+        Tipos de neuronas y su cantidad en la red. Estos tipos pueden especificarse con instancias
+        de Neurona o nombres de tipos predefinidos, que se convierten a instancias al construirse la red.
 
     conexiones : Array | SparseArray
         Matriz de pesos sinápticos con diagonal cero. Puede almacenarse como una matriz densa o
@@ -52,7 +53,7 @@ class RedDeNeuronas:
         Indica si la matriz de conexiones se almacena utilizando una representación dispersa CSR.
     """
 
-    def __init__(self, neuronas: dict[Neurona, int], conexiones: Array | list[list[float]] | int = 0,
+    def __init__(self, neuronas: dict[Neurona | str, int], conexiones: Array | list[list[float]] | int = 0,
                  backend: Literal["numpy", "cupy"] = "numpy", precision: Literal[32, 64] = 32,
                  sparse: bool = True, semilla: int | None = None):
         """
@@ -60,9 +61,10 @@ class RedDeNeuronas:
 
         Parameters
         ----------
-        neuronas : dict[Neurona, int]
-            Diccionario de neuronas a crear. La clave es una instancia de Neurona y el valor es el número
-            de neuronas de ese tipo.
+        neuronas : dict[Neurona | str, int]
+            Diccionario de neuronas a crear. La clave es una instancia de Neurona, o el nombre de un tipo predefinido,
+            y el valor es el número de neuronas de ese tipo. Las cadenas de texto se convierten automáticamente a
+            instancias de Neurona.
 
         conexiones : Array | list[list[float]] | int
             Matriz de conexiones entre las neuronas, donde cada fila es una lista con los pesos de las
@@ -140,8 +142,15 @@ class RedDeNeuronas:
             raise TypeError("Las neuronas deben pasarse como un diccionario con las neuronas y la cantidad a crear.")
         
         for neurona in neuronas.keys():
-            if not isinstance(neurona, Neurona):
-                raise TypeError("Las claves del diccionario de neuronas deben ser instancias de la clase Neurona.")
+            if not isinstance(neurona, (Neurona, str)):
+                raise TypeError("Las claves del diccionario de neuronas deben ser instancias de la clase Neurona \
+                                o nombres de tipos predefinidos.")
+            
+            if isinstance(neurona, str):
+                neurona_obj = Neurona.predefinida(neurona)
+                cantidad = neuronas[neurona]
+                neuronas.pop(neurona)
+                neuronas[neurona_obj] = cantidad
                 
         for cantidad in neuronas.values():
             if not isinstance(cantidad, int):
@@ -502,7 +511,7 @@ class RedDeNeuronas:
         -------
         dict[Neurona, int]
             Copia del diccionario original que asocia cada objeto Neurona con el número de instancias
-            de ese tipo.
+            de ese tipo. Las cadenas de tipos se han convertido a instancias de Neurona al crear la red.
         """
         return self.__neuronas.copy()
 
