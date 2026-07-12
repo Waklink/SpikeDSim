@@ -53,7 +53,7 @@ class RedDeNeuronas:
         Indica si la matriz de conexiones se almacena utilizando una representación dispersa CSR.
     """
 
-    def __init__(self, neuronas: dict[Neurona | str, int], conexiones: Array | list[list[float]] | int = 0,
+    def __init__(self, neuronas: dict[Neurona | str, int], conexiones: int | list[list[float]] | Array | SparseArray = 0,
                  backend: Literal["numpy", "cupy"] = "numpy", precision: Literal[32, 64] = 32,
                  sparse: bool = True, semilla: int | None = None):
         """
@@ -66,13 +66,16 @@ class RedDeNeuronas:
             y el valor es el número de neuronas de ese tipo. Las cadenas de texto se convierten automáticamente a
             instancias de Neurona.
 
-        conexiones : Array | list[list[float]] | int
+        conexiones : int | list[list[float]] | Array | SparseArray
             Matriz de conexiones entre las neuronas, donde cada fila es una lista con los pesos de las
             conexiones de la neurona actual; o un entero que indica el número de conexiones aleatorias a crear.
-            Por defecto el número de conexiones es 0.
+            También puede ser una matriz dispersa csr. En el caso de ser un array o una matriz dispersa, deben
+            coincidir con el backend seleccionado (NumPy/SciPy para CPU o CuPy/CuPyX para GPU). Por defecto el
+            número de conexiones es 0.
 
         backend : Literal["numpy", "cupy"], optional
-            Nombre del backend a utilizar. Utilizar "numpy" para CPU o "cupy" para GPU. Por defecto se usa NumPy.
+            Nombre del backend a utilizar. Utilizar "numpy" para CPU o "cupy" para GPU, aceptándose variantes
+            con mayúsculas. Por defecto se usa NumPy.
 
         precision : Literal[32, 64], optional
             Tamaño, en bits, en el que se guardan los valores de los arrays. La precisión por defecto es 32 bits
@@ -90,7 +93,8 @@ class RedDeNeuronas:
         ------
         TypeError
             Si alguno de los parámetros no es del tipo de dato correcto, neuronas tiene que ser un diccionario formado
-            por instancias de Neurona y enteros, conexiones debe ser o un entero positivo, una lista o un Array.
+            por instancias de Neurona y enteros, conexiones debe ser o un entero positivo, una lista, o un Array o
+            csr_matriz que coincida con el backend seleccionado.
 
         ValueError
             Si algún parámetro no es válido, las dimensiones de las conexiones son incorrectas o su diagonal
@@ -109,6 +113,7 @@ class RedDeNeuronas:
         
 
         # Asignación del backend y del módulo de sparse a utilizar
+        backend = backend.lower().strip()
         if backend == "numpy":
             self.__xp = np
             self.__sp = sp
@@ -137,11 +142,13 @@ class RedDeNeuronas:
         else:
             raise ValueError("El dtype debe ser 32 o 64.")
         
+        self.__precision = precision
+        
         # Comprobaciones de tipo y valores del diccionario con las neuronas
         if not isinstance(neuronas, dict):
             raise TypeError("Las neuronas deben pasarse como un diccionario con las neuronas y la cantidad a crear.")
         
-        for neurona in neuronas.keys():
+        for neurona in list(neuronas.keys()):
             if not isinstance(neurona, (Neurona, str)):
                 raise TypeError("Las claves del diccionario de neuronas deben ser instancias de la clase Neurona \
                                 o nombres de tipos predefinidos.")
@@ -208,14 +215,21 @@ class RedDeNeuronas:
             else:
                 self.__conexiones = self.__xp.asarray(conexiones, dtype=self.__dtype)
         # Matriz a partir de un array de NumPy o de CuPy
-        elif isinstance(conexiones, (np.ndarray, cp.ndarray)):
+        elif isinstance(conexiones, self.__xp.ndarray):
             if self.__sparse:
                 self.__conexiones = self.__sp.csr_matrix(conexiones, dtype=self.__dtype)
             else:
                 self.__conexiones = self.__xp.asarray(conexiones, dtype=self.__dtype)
+        # Matriz a partir de una matriz dispersa CSR
+        elif isinstance(conexiones, self.__sp.csr_matrix):
+            if self.__sparse:
+                self.__conexiones = self.__sp.csr_matrix(conexiones, dtype=self.__dtype)
+            else:
+                self.__conexiones = self.__xp.asarray(conexiones.toarray(), dtype=self.__dtype)
         else:
             raise TypeError("El parámetro 'conexiones' debe ser un entero, una matriz formada por listas \
-                             o un array de NumPy o CuPy en forma de matriz cuadrada.")
+                            o un array, ambos en forma de matriz cuadrada; o una matriz dispersa, todo \
+                            ello del mismo backend indicado.")
         
         # Comprobaciones de la matriz de conexiones
         if self.__conexiones.shape != (self.__num_neuronas, self.__num_neuronas):
@@ -429,6 +443,61 @@ class RedDeNeuronas:
             self.__u[:] = self.__xp.asarray(u, dtype=self.__dtype)
     
 
+    def convertir_backend(self, nuevo_backend: Literal["numpy", "cupy"]) -> RedDeNeuronas:
+        """
+        Crear una copia de la red actual con el backend especificado, conservando también su estado actual.
+
+        Parameters
+        ----------
+        nuevo_backend : Literal["numpy", "cupy"]
+            El backend a utilizar en la copia de la red, se aceptan variantes con mayúsculas.
+        
+        Returns
+        -------
+        RedDeNeuronas
+            Una copia de la red actual con el nuevo backend especificado.
+        """
+
+        nuevo_backend = nuevo_backend.lower().strip()
+        
+        if nuevo_backend == self.backend:
+            conexiones = self.__conexiones.copy()
+        elif nuevo_backend == "numpy":
+            conexiones = self.__conexiones.get()
+        else: # cupy
+            if self.__sparse:
+                conexiones = cpsp.csr_matrix(self.__conexiones)
+            else:
+                conexiones = cp.asarray(self.__conexiones)
+            
+        nueva_red = RedDeNeuronas(self.__neuronas.copy(), conexiones, nuevo_backend, self.__precision, self.__sparse)
+
+        nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
+
+        return nueva_red
+
+    def convertir_formato(self, nuevo_sparse: bool) -> RedDeNeuronas:
+        """
+        Crear una copia de la red actual, con el nuevo formato de la matriz de conexiones especificado,
+        conservando también su estado actual.
+
+        Parameters
+        ----------
+        nuevo_sparse : bool
+            Nuevo formato de la matriz, puede ser una matriz dispersa por filas (csr) o una matriz densa.
+        
+        Returns
+        -------
+        RedDeNeuronas
+            Copia de la red, con el nuevo formato de la matriz de conexiones.
+        """
+        nueva_red = RedDeNeuronas(self.__neuronas.copy(), self.__conexiones.copy(), self.backend, self.__precision, nuevo_sparse)
+
+        nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
+
+        return nueva_red
+    
+
     def _estado(self) -> tuple[Array, Array]:
         """
         Devuelve referencias directas al estado interno de la red.
@@ -498,9 +567,9 @@ class RedDeNeuronas:
         Returns
         -------
         str
-            "CPU (NumPy)" si se usa NumPy, o "GPU (CuPy)" si se usa CuPy.
+            "numpy" si se usa NumPy, o "cupy" si se usa CuPy.
         """
-        return "GPU (CuPy)" if self.__uso_gpu else "CPU (NumPy)"
+        return "cupy" if self.__uso_gpu else "numpy"
 
     @property
     def neuronas(self) -> dict[Neurona, int]:

@@ -2,7 +2,7 @@ import time
 import numpy as np
 import cupy as cp
 
-from typing import Literal
+from typing import Any, Literal
 from pathlib import Path
 from numbers import Real
 from tqdm import tqdm
@@ -144,7 +144,7 @@ class Simulador:
     
 
     def __actualizar_rendimiento(self, barra: tqdm | None, process: psutil.Process,
-                                 gpu_handle: pynvml.c_nvmlDevice_t | None, red_usa_gpu: bool,
+                                 gpu_handle: Any | None, red_usa_gpu: bool,
                                  muestras: int, cpu_suma: float, cpu_max: float, ram_suma: float,
                                  ram_max: float, gpu_suma: float, gpu_max: float, vram_suma: float,
                                  vram_max: float) -> tuple[int, float, float, float, float, float, float, float, float]:
@@ -168,7 +168,7 @@ class Simulador:
         process : psutil.Process
             Proceso cuyo consumo de memoria será medido.
 
-        gpu_handle : pynvml.c_nvmlDevice_t | None
+        gpu_handle : Any | None
             Identificador del dispositivo GPU proporcionado por NVML.
             Puede ser None si no se utiliza GPU.
 
