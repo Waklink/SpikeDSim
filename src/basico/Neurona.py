@@ -4,90 +4,95 @@ class Neurona:
     """
     Representación de una neurona del modelo de Izhikevich.
 
-    Permite definir neuronas con parámetros personalizados o utilizar configuraciones
-    predefinidas. Mantiene el estado dinámico ('v', 'u') y permite simular la evolución
-    temporal de manera individual.
+    Permite definir neuronas con parámetros personalizados o utilizar configuraciones predefinidas.
+    Mantiene el estado dinámico del modelo de Izhikevich (v, u) y permite actualizarlo mediante pasos
+    individuales.
 
     Attributes
     ----------
     estado : tuple[float, float]
-        Estado actual de la neurona como (v, u), donde v es el potencial de membrana y u es la
-        variable de recuperación.
+        Estado actual de la neurona como (v, u), donde v es el potencial de membrana y u es la variable
+        de recuperación.
 
     parametros : tuple[float, float, float, float]
-        Parámetros del modelo Izhikevich como (a, b, c, d), donde a representa la velocidad de
-        recuperación, b la sensibilidad al estímulo, c el potencial de recuperación después de un
-        disparo y d el incremento de la variable de recuperación después de un disparo.
+        Parámetros del modelo Izhikevich como (a, b, c, d), donde a representa la escala temporal de
+        la variable de recuperación, b la sensibilidad de la variable de recuperación al potencial
+        de membrana, c el potencial de membrana al que se reinicia la neurona después de un disparo
+        y d el incremento de la variable de recuperación después de un disparo.
 
-    tipo : str
-        Tipo de la neurona, puede ser un tipo predefinido (RS, IB, CH, FS, LTS, TC o RZ) o personalizado.
+    nombre : str
+        Nombre identificativo de la neurona, puede ser un tipo predefinido o un nombre personalizado.
 
     es_excitatoria : bool
         Indica si la neurona es excitatoria (True) o inhibitoria (False).
     """
 
-    def __init__(self, a: float = 0.02, b: float = 0.2, c: int | float = -65, d: int | float = 2,
+    def __init__(self, a: float, b: float, c: int | float, d: int | float,
                  v_inicial: int | float = -65, u_inicial: int | float | None = None,
-                 tipo: str = "Personalizado", es_excitatoria: bool = True):
+                 nombre: str = "Personalizado", es_excitatoria: bool = True):
         """
         Inicializa una instancia de la clase Neurona con parámetros personalizados.
 
         Parameters
         ----------
         a : float
-            Parámetro que regula la velocidad de recuperación de la neurona.
+            Escala temporal de la variable de recuperación.
 
         b : float
-            Parámetro que regula la sensibilidad de la neurona al estímulo.
+            Sensibilidad de la variable de recuperación respecto al potencial de membrana.
 
         c : int | float
-            Parámetro que regula el potencial de membrana de recuperación.
+            Potencial de membrana al que se reinicia la neurona tras un disparo.
 
         d : int | float
-            Parámetro que regula la velocidad de recuperación de la variable de recuperación.
+            Incremento de la variable de recuperación tras un disparo.
 
         v_inicial : int | float, optional
             Potencial de membrana inicial de la neurona. Por defecto es -65 mV.
 
-        u_inicial : int | float, optional
-            Variable de recuperación inicial de la neurona. Por defecto se calcula como b * v_inicial.
+        u_inicial : int | float | None, optional
+            Variable de recuperación inicial de la neurona. Por defecto, si no se proporciona, se
+            calcula como b * v_inicial.
 
-        tipo : str
-            Tipo de la neurona.
+        nombre : str, optional
+            Nombre de la neurona. Por defecto es "Personalizado".
 
-        es_excitatoria : bool
-            Indica si la neurona es excitatoria (True) o inhibitoria (False).
+        es_excitatoria : bool, optional
+            Indica si la neurona es excitatoria (True) o inhibitoria (False). Por defecto es True
         
         Raises
         ------
         TypeError
-            Si alguno de los parámetros pasados no son del tipo correcto, los números deben ser reales,
-            el tipo un string y es_excitatoria un booleano.
+            Si alguno de los parámetros pasados no es del tipo correcto, los números deben ser reales,
+            el nombre una cadena de texto y es_excitatoria un booleano.
         """
-        if not (isinstance(a, Real) and isinstance(b, Real) and isinstance(c, Real) and isinstance(d, Real)):
-            raise TypeError("Los parámetros deben ser números reales.")
 
+        # Validaciones
+        self._validar_numero_real(a, "a")
+        self._validar_numero_real(b, "b")
+        self._validar_numero_real(c, "c")
+        self._validar_numero_real(d, "d")
+        
+        if not isinstance(nombre, str):
+            raise TypeError("El nombre de la neurona debe ser una cadena de texto.")
+
+        if not isinstance(es_excitatoria, bool):
+            raise TypeError("El parámetro es_excitatoria debe ser un booleano.")
+        
+        self._validar_numero_real(v_inicial, "El potencial de membrana inicial, v_inicial,")
+        
+        if u_inicial is not None:
+            self._validar_numero_real(u_inicial, "La variable de recuperación inicial, u_inicial,",
+                                      " o None para calcularlo automáticamente")
+        
+        # Asignaciones
         self.__a = a
         self.__b = b
         self.__c = c
         self.__d = d
 
-        if not isinstance(tipo, str):
-            raise TypeError("El tipo de neurona debe ser un string con un nombre que represente a la neurona.")
-        
-        if not isinstance(es_excitatoria, bool):
-            raise TypeError("El parámetro es_excitatoria debe ser un booleano que representa si la neurona \
-                            es excitatoria o inhibitoria.")
-
-        self.__tipo = tipo
+        self.__nombre = nombre
         self.__es_excitatoria = es_excitatoria
-
-        if not isinstance(v_inicial, Real):
-            raise TypeError("El potencial de membrana inicial, v_inicial, debe ser un número real.")
-        
-        if u_inicial is not None and not isinstance(u_inicial, Real):
-            raise TypeError("La variable de recuperación inicial, u_inicial, debe ser un número real o None, \
-                            para que se calcule automáticamente.")
 
         self.__v = v_inicial
         
@@ -131,33 +136,80 @@ class Neurona:
     }
 
     _TIPOS = {
-        "rs": (0.02, 0.2, -65, 8, "RS", True),
-        "ib": (0.02, 0.2, -55, 4, "IB", True),
-        "ch": (0.02, 0.2, -50, 2, "CH", True),
-        "fs": (0.1, 0.2, -65, 2, "FS", False),
-        "lts": (0.02, 0.25, -65, 2, "LTS", False),
-        "tc": (0.02, 0.25, -65, 0.05, "TC", True),
-        "rz": (0.1, 0.26, -65, 2, "RZ", False)
+        "rs": {"parametros": (0.02, 0.2, -65, 8),
+               "nombre": "Regular Spiking",
+               "es_excitatoria": True},
+
+        "ib": {"parametros": (0.02, 0.2, -55, 4),
+               "nombre": "Intrinsically Bursting",
+               "es_excitatoria": True},
+
+        "ch": {"parametros": (0.02, 0.2, -50, 2),
+               "nombre": "Chattering",
+               "es_excitatoria": True},
+
+        "fs": {"parametros": (0.1, 0.2, -65, 2),
+               "nombre": "Fast Spiking",
+               "es_excitatoria": False},
+
+        "lts": {"parametros": (0.02, 0.25, -65, 2),
+               "nombre": "Low Threshold Spiking",
+               "es_excitatoria": False},
+
+        "tc": {"parametros": (0.02, 0.25, -65, 0.05),
+               "nombre": "Thalamocortical",
+               "es_excitatoria": True},
+
+        "rz": {"parametros": (0.1, 0.26, -65, 2),
+               "nombre": "Resonator",
+               "es_excitatoria": False}
     }
+
+    @staticmethod
+    def _validar_numero_real(valor: object, nombre: str, mensaje: str | None = None) -> None:
+        """
+        Comprueba que un valor sea un número real.
+
+        Parameters
+        ----------
+        valor : object
+            Valor a comprobar.
+        
+        nombre : str
+            Nombre del parámetro utilizado en el mensaje de error.
+        
+        mensaje : str | None, optional
+            Mensaje de error extra, añadido al final del mensaje por defecto.
+        
+        Raises
+        ------
+        TypeError
+            Si el valor no es un número real.
+        """
+        if not isinstance(valor, Real):
+            raise TypeError(f"{nombre} debe ser un número real{mensaje if mensaje is not None else ''}.")
+
 
     @classmethod
     def predefinida(cls, tipo: str, v_inicial: int | float = -65,
-                    u_inicial: int | float | None = None) -> Neurona:
+                    u_inicial: int | float | None = None) -> "Neurona":
         """
-        Crea una instancia de Neurona con parámetros precargados según el tipo.
+        Crea una instancia de Neurona con parámetros predefinidos según el tipo.
 
         Parameters
         ----------
         tipo : str
-            Tipo de la neurona. Los tipos disponibles son:
+            Tipo de neurona. Los tipos disponibles son:
+
             RS (Regular Spiking), IB (Intrinsically Bursting), CH (Chattering), FS (Fast Spiking),
-            LTS (Low Threshold Spiking), TC (Thalamo Cortical), RZ (Resonator).
-            Se aceptan variantes en minúsculas y con '-' en lugar de espacios.
+            LTS (Low Threshold Spiking), TC (Thalamocortical), RZ (Resonator).
+            
+            Se aceptan variantes en minúsculas y con guiones en lugar de espacios.
 
         v_inicial : int | float, optional
             Potencial de membrana inicial de la neurona. Por defecto es -65 mV.
 
-        u_inicial : int | float, optional
+        u_inicial : int | float | None, optional
             Variable de recuperación inicial de la neurona. Por defecto se calcula como b * v_inicial.
 
         Returns
@@ -168,31 +220,34 @@ class Neurona:
         Raises
         ------
         TypeError
-            Si el tipo no es un string o los valores de estado iniciales no son números reales, y,
-            en el caso de u_inicial, tampoco es None.
+            Si el tipo no es una cadena de texto o los valores de estado iniciales no son números
+            reales, y, en el caso de u_inicial, tampoco es None.
 
         ValueError
             Si el tipo de neurona no es reconocido.
         """
 
         if not isinstance(tipo, str):
-            raise TypeError("El tipo de neurona debe ser un string con un nombre que represente a la neurona.")
+            raise TypeError("El tipo de neurona debe ser una cadena de texto.")
         
-        if not isinstance(v_inicial, Real):
-            raise TypeError("El potencial de membrana inicial, v_inicial, debe ser un número real.")
-        
-        if u_inicial is not None and not isinstance(u_inicial, Real):
-            raise TypeError("La variable de recuperación inicial, u_inicial, debe ser un número real o None, \
-                            para que se calcule automáticamente.")
+        cls._validar_numero_real(v_inicial, "El potencial de membrana inicial, v_inicial,")
+
+        if u_inicial is not None:
+            cls._validar_numero_real(u_inicial, "La variable de recuperación inicial, u_inicial,",
+                                     " o None para calcularlo automáticamente")
 
         tipo = tipo.strip().lower()
         
         if tipo not in cls._ALIAS:
-            raise ValueError(f"El tipo {tipo} no existe, por favor use un valor predefinido o cree \
-                                una neurona personalizada con el constructor.")
+            raise ValueError(f"El tipo de neurona '{tipo}' no existe. Use un valor predefinido o cree"
+                             " una neurona personalizada con el constructor.")
         
         tipo = cls._ALIAS[tipo]
-        a, b, c, d, nombre, es_excitatoria = cls._TIPOS[tipo]
+        datos = cls._TIPOS[tipo]
+
+        a, b, c, d = datos["parametros"]
+        nombre = datos["nombre"]
+        es_excitatoria = datos["es_excitatoria"]
         
         v = v_inicial
         u = b * v if u_inicial is None else u_inicial
@@ -204,7 +259,9 @@ class Neurona:
         """
         Actualiza el estado de la neurona para un paso temporal.
 
-        En caso de disparo (v >= 30), reinicia v y actualiza u según las ecuaciones de Izhikevich.
+        Comprueba si la neurona ha alcanzado el umbral de disparo en el estado actual (v >= 30 mV),
+        en cuyo caso se aplican las condiciones de reinicio del modelo antes de integrar el siguiente
+        paso temporal.
 
         Parameters
         ----------
@@ -212,12 +269,12 @@ class Neurona:
             Corriente de entrada.
 
         dt : float
-            Paso temporal de simulación. Debe ser positivo.
+            Paso temporal de simulación en milisegundos. Debe ser positivo.
 
         Returns
         -------
         bool
-            True si la neurona se dispara en este paso, False en caso contrario.
+            True si se ha detectado un disparo al inicio del paso, False en caso contrario.
 
         Raises
         ------
@@ -228,26 +285,25 @@ class Neurona:
             Si dt es menor o igual a 0.
         """
 
-        if not isinstance(I, Real):
-            raise TypeError("La corriente de entrada debe ser un número real.")
-        
-        if not isinstance(dt, Real):
-            raise TypeError("El paso temporal tiene que ser un número real.")
-        
+        spike = False
 
+        if self.__v >= 30:
+            self.__v = self.__c
+            self.__u += self.__d
+            spike = True
+
+        self._validar_numero_real(I, "La corriente de entrada, I,")
+        
+        self._validar_numero_real(dt, "El paso temporal, dt,")
+        
         if dt <= 0:
             raise ValueError("El paso temporal tiene que ser positivo.")
 
         # Evitar asignaciones intermedias de elevar al cuadrado haciendo la multiplicación directamente
         self.__v += dt * (0.04 * self.__v * self.__v + 5 * self.__v + 140 - self.__u + I)
         self.__u += dt * (self.__a * (self.__b * self.__v - self.__u))
-
-        if self.__v >= 30:
-            self.__v = self.__c
-            self.__u += self.__d
-            return True
         
-        return False
+        return spike
     
 
     def reiniciar(self) -> None:
@@ -278,14 +334,12 @@ class Neurona:
             Si alguno de los valores pasados no es un número real.
         """
         if v is not None:
-            if not isinstance(v, Real):
-                raise TypeError("El potencial de membrana, v, pasado debe ser un número real.")
+            self._validar_numero_real(v, "El nuevo potencial de membrana, v,")
             
             self.__v = v
         
         if u is not None:
-            if not isinstance(u, Real):
-                raise TypeError("La variable de recuperación, u, pasada debe ser un número real.")
+            self._validar_numero_real(u, "La nueva variable de recuperación, u,")
             
             self.__u = u
 
@@ -298,22 +352,24 @@ class Neurona:
         Returns
         -------
         dict[str, str]
-            Mapa de alias a nombres canónicos de tipo.
+            Copia del diccionario de alias a nombres canónicos de tipo.
         """
         return cls._ALIAS.copy()
     
 
     @classmethod
-    def tipos(cls) -> dict[str, tuple[float, float, float, float, str, bool]]:
+    def tipos(cls) -> dict[str, dict[str, tuple[float, float, float, float] | str | bool]]:
         """
-        Obtiene los parámetros de los tipos de neurona predefinidos.
+        Obtiene los parámetros, el nombre y si la neurona es excitatoria de los tipos de neurona
+        predefinidos.
 
         Returns
         -------
-        dict[str, tuple[float, float, float, float, str, bool]]
-            Diccionario que enlaza cada tipo canónico con los valores (a, b, c, d, nombre, es_excitatoria).
+        dict[str, dict[str, tuple[float, float, float, float] | str | bool]]
+            Diccionario que enlaza cada tipo con un diccionario con los parámetros, el nombre y si
+            la neurona es excitatoria.
         """
-        return cls._TIPOS.copy()
+        return {k: v.copy() for k, v in cls._TIPOS.items()}
     
 
     @classmethod
@@ -331,10 +387,7 @@ class Neurona:
 
     def _estado(self) -> tuple[float, float]:
         """
-        Devuelve referencias directas al estado interno de la neurona.
-
-        A diferencia de la propiedad estado, este método está destinado exclusivamente
-        para uso interno, donde se requiere acceder al estado con el menor coste posible.
+        Devuelve el estado interno de la neurona.
 
         Returns
         -------
@@ -357,16 +410,16 @@ class Neurona:
         return float(self.__v), float(self.__u)
     
     @property
-    def tipo(self) -> str:
+    def nombre(self) -> str:
         """
-        Devuelve el nombre del tipo de neurona.
+        Devuelve el nombre de la neurona.
 
         Returns
         -------
         str
-            Tipo de la neurona.
+            Nombre de la neurona.
         """
-        return self.__tipo
+        return self.__nombre
     
     @property
     def es_excitatoria(self) -> bool:

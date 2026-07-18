@@ -27,11 +27,16 @@ class RedDeNeuronas:
 
     neuronas : dict[Neurona, int]
         Tipos de neuronas y su cantidad en la red. Estos tipos pueden especificarse con instancias
-        de Neurona o nombres de tipos predefinidos, que se convierten a instancias al construirse la red.
+        de Neurona o nombres de tipos predefinidos, que se convierten a instancias al construirse la
+        red.
 
-    conexiones : Array | SparseArray
+    conexiones : list
         Matriz de pesos sinápticos con diagonal cero. Puede almacenarse como una matriz densa o
         mediante una representación dispersa CSR.
+
+        Los elementos de la matriz representan conexiones desde la neurona de la columna (presináptica)
+        hacia la neurona de la fila (postsináptica). Los pesos positivos corresponden a conexiones
+        excitatorias y los negativos a inhibitorias. 
 
     num_neuronas : int
         Número total de neuronas en la red.
@@ -39,13 +44,13 @@ class RedDeNeuronas:
     num_conexiones : int
         Número total de conexiones diferentes de cero.
 
-    estado : dict[str, Array]
+    estado : dict[str, list]
         Estado actual de la red con v y u.
 
-    parametros : dict[str, Array]
-        Parámetros del modelo Izhikevich (a, b, c, d) para todas las neuronas.
+    parametros : dict[str, list]
+        Parámetros (a, b, c, d) de todas las neuronas.
 
-    dtype : np.dtype | cp.dtype
+    dtype : type[np.floating] | type[cp.floating]:
         Tipo de dato utilizado internamente por los arrays de la red. Puede ser float32 o
         float64 según la precisión seleccionada en el constructor.
 
@@ -62,48 +67,96 @@ class RedDeNeuronas:
         Parameters
         ----------
         neuronas : dict[Neurona | str, int]
-            Diccionario de neuronas a crear. La clave es una instancia de Neurona, o el nombre de un tipo predefinido,
-            y el valor es el número de neuronas de ese tipo. Las cadenas de texto se convierten automáticamente a
-            instancias de Neurona.
+            Diccionario de neuronas a crear. La clave es una instancia de Neurona, o el nombre de un
+            tipo predefinido, y el valor es el número de neuronas de ese tipo. Las cadenas de texto
+            se convierten automáticamente a instancias de Neurona.
 
         conexiones : int | list[list[float]] | Array | SparseArray
-            Matriz de conexiones entre las neuronas, donde cada fila es una lista con los pesos de las
-            conexiones de la neurona actual; o un entero que indica el número de conexiones aleatorias a crear.
-            También puede ser una matriz dispersa csr. En el caso de ser un array o una matriz dispersa, deben
-            coincidir con el backend seleccionado (NumPy/SciPy para CPU o CuPy/CuPyX para GPU). Por defecto el
-            número de conexiones es 0.
+            Matriz de conexiones entre las neuronas, donde cada fila es una lista con los pesos de
+            las conexiones de la neurona que representa; o un entero que indica el número de conexiones
+            aleatorias a crear. También puede ser una matriz dispersa csr. En el caso de ser un array
+            o una matriz dispersa, deben coincidir con el backend seleccionado (NumPy/SciPy para CPU
+            o CuPy/CuPyX para GPU). Por defecto el número de conexiones es 0.
 
         backend : Literal["numpy", "cupy"], optional
-            Nombre del backend a utilizar. Utilizar "numpy" para CPU o "cupy" para GPU, aceptándose variantes
-            con mayúsculas. Por defecto se usa NumPy.
+            Nombre del backend a utilizar. Utilizar "numpy" para CPU o "cupy" para GPU, ignorándose
+            mayúsculas y espacios al principio y final. Por defecto se usa NumPy.
 
         precision : Literal[32, 64], optional
-            Tamaño, en bits, en el que se guardan los valores de los arrays. La precisión por defecto es 32 bits
-            (float32).
+            Tamaño, en bits, en el que se guardan los valores de los arrays. La precisión por defecto
+            es 32 bits (float32).
 
         sparse : bool, optional
-            Indica si la matriz de conexiones se almacena utilizando una representación CSR dispersa. Por defecto
-            es True.
+            Indica si la matriz de conexiones se almacena utilizando una representación CSR dispersa.
+            Por defecto es True.
 
         semilla : int | None, optional
-            La semilla a utilizar para generar las conexiones aleatorias en el caso de que conexiones sea
-            un entero. Por defecto vale None.
+            La semilla a utilizar para generar las conexiones aleatorias en el caso de que conexiones
+            sea un entero. Por defecto vale None.
 
         Raises
         ------
         TypeError
-            Si alguno de los parámetros no es del tipo de dato correcto, neuronas tiene que ser un diccionario formado
-            por instancias de Neurona y enteros, conexiones debe ser o un entero positivo, una lista, o un Array o
-            csr_matriz que coincida con el backend seleccionado.
+            Si alguno de los parámetros no es del tipo de dato correcto, neuronas tiene que ser un
+            diccionario formado por instancias de Neurona o cadenas de texto y enteros, conexiones debe ser un entero
+            positivo, una lista, o un Array o csr_matriz que coincida con el backend seleccionado.
 
         ValueError
-            Si algún parámetro no es válido, las dimensiones de las conexiones son incorrectas o su diagonal
-            no es cero.
+            Si algún parámetro no es válido, las dimensiones de las conexiones son incorrectas o su
+            diagonal no es cero.
         """
 
-        # Comprobaciones de tipo de backend, de sparse y de precision
+        # Comprobación y asignación de tipo de backend, de sparse y de precision
+        self._validar_parametros_generales(backend, precision, sparse)
+        
+        # Comprobaciones de tipo y valores del diccionario con las neuronas
+        # Conversión de cadenas de texto a instancias de Neurona
+        self._validar_neuronas(neuronas)
+
+        # Número total de neuronas
+        self.__num_neuronas = sum(self.__neuronas.values())
+
+        # Inicializar y llenar vectores de parámetros y estado inicial
+        self._crear_vectores()
+
+        # Creación y llenado de la matriz de conexiones entre neuronas
+        self._crear_matriz_conexiones(conexiones, semilla)
+        
+        # Comprobaciones de la matriz de conexiones
+        self._validar_conexiones()
+
+        # Guardar número de conexiones que existan.
+        self.__num_conexiones = self.__conexiones.nnz if self.__sparse else int(self.__xp.count_nonzero(self.__conexiones))
+    
+
+    def _validar_parametros_generales(self, backend: Literal["numpy", "cupy"], precision: Literal[32, 64],
+                                      sparse: bool) -> None:
+        """
+        Comprobar y asignar el backend, la precisión de los datos a guardar y si las conexiones se guardan
+        como una sparse matrix.
+
+        Parameters
+        ----------
+        backend : Literal["numpy", "cupy"]
+            El backend a validar.
+        
+        precision : Literal[32, 64]
+            La precisión a validar.
+        
+        sparse : bool
+            El sparse a validar.
+        
+        Raises
+        ------
+        TypeError
+            Si alguno de los parámetros pasados no son del tipo correcto.
+        
+        ValueError
+            Si el backend o la precisión no son valores válidos.
+        """
+
         if not isinstance(backend, str):
-            raise TypeError("El backend debe ser un string.")
+            raise TypeError("El backend debe ser una cadena de texto.")
         
         if not isinstance(sparse, bool):
             raise TypeError("El parámetro sparse debe ser un booleano.")
@@ -121,9 +174,9 @@ class RedDeNeuronas:
             try:
                 cp.zeros(1)
             except Exception as e:
-                raise RuntimeError("Su equipo no puede realizar operaciones en la gpu, por favor asegúrese \
-                                   de tener una tarjeta gráfica compatible con CuPy, y de tener el driver \
-                                   adecuado instalado.") from e
+                raise RuntimeError("Su equipo no puede realizar operaciones en la gpu, por favor "
+                                   "asegúrese de tener una tarjeta gráfica compatible con CuPy, y"
+                                   " de tener el driver adecuado instalado.") from e
             
             self.__xp = cp
             self.__sp = cpsp
@@ -140,37 +193,59 @@ class RedDeNeuronas:
         elif precision == 64:
             self.__dtype = self.__xp.float64
         else:
-            raise ValueError("El dtype debe ser 32 o 64.")
+            raise ValueError("La precisión debe ser 32 o 64.")
         
         self.__precision = precision
+    
+
+    def _validar_neuronas(self, neuronas: dict[Neurona | str, int]) -> None:
+        """
+        Validar las neuronas, convirtiendo las cadenas de texto a instancias de Neurona, con los valores
+        predefinidos para esos tipos.
+
+        Parameters
+        ----------
+        neuronas : dict[Neurona | str, int]
+            Diccionario con las neuronas y sus cantidades a validar y/o convertir.
         
-        # Comprobaciones de tipo y valores del diccionario con las neuronas
+        Raises
+        ------
+        TypeError
+            Si el parámetro neuronas no es un diccionario, alguna de las neuronas no son instancias
+            de Neurona o cadenas de texto o alguna cantidad no es un entero.
+
+        ValueError
+            Si alguna cantidad es negativa.
+        """
+
         if not isinstance(neuronas, dict):
-            raise TypeError("Las neuronas deben pasarse como un diccionario con las neuronas y la cantidad a crear.")
+            raise TypeError("Las neuronas deben pasarse como un diccionario con las neuronas y la "
+                            "cantidad a crear.")
         
-        for neurona in list(neuronas.keys()):
+        self.__neuronas = {}
+        
+        for neurona, cantidad in neuronas.items():
             if not isinstance(neurona, (Neurona, str)):
-                raise TypeError("Las claves del diccionario de neuronas deben ser instancias de la clase Neurona \
-                                o nombres de tipos predefinidos.")
+                raise TypeError("Las claves del diccionario de neuronas deben ser instancias de la"
+                                " clase Neurona o nombres de tipos predefinidos.")
             
-            if isinstance(neurona, str):
-                neurona_obj = Neurona.predefinida(neurona)
-                cantidad = neuronas[neurona]
-                neuronas.pop(neurona)
-                neuronas[neurona_obj] = cantidad
-                
-        for cantidad in neuronas.values():
             if not isinstance(cantidad, int):
                 raise TypeError("Las cantidades de las neuronas deben ser números enteros.")
             
             if cantidad < 0:
                 raise ValueError("Las cantidades de las neuronas deben ser positivas.")
-        
-        # Guardar el diccionario con las neuronas
-        self.__neuronas = neuronas.copy()
+            
+            # Convertir cadena a instancia de Neurona
+            if isinstance(neurona, str):
+                neurona = Neurona.predefinida(neurona)
+                
+            self.__neuronas[neurona] = cantidad
 
-        # Número total de neuronas
-        self.__num_neuronas = sum(neuronas.values())
+
+    def _crear_vectores(self) -> None:
+        """
+        Inicializa y llena los vectores de parámetros y el estado inicial de todas las neuronas.
+        """
 
         # Creación de vectores con los parámetros de las neuronas
         self.__a = self.__xp.empty(self.__num_neuronas, dtype=self.__dtype)
@@ -184,7 +259,7 @@ class RedDeNeuronas:
         # LLenar los vectores de parámetros
         indice_actual = 0
 
-        for neurona, cantidad in neuronas.items():
+        for neurona, cantidad in self.__neuronas.items():
             a, b, c, d = neurona.parametros
             v, u = neurona.estado
             self.__a[indice_actual:indice_actual + cantidad] = a
@@ -200,14 +275,34 @@ class RedDeNeuronas:
         self.__v_inicial = self.__v.copy()
         self.__u_inicial = self.__u.copy()
 
-        # Creación y llenado de la matriz de conexiones entre neuronas
+
+    def _crear_matriz_conexiones(self, conexiones: int | list[list[float]] | Array | SparseArray,
+                                 semilla: int | None) -> None:
+        """
+        Crear la matriz de conexiones, basándose en si es dispersa o no y si se proporciona una matriz
+        completa o se quiere crear valores aleatorios.
+
+        Parameters
+        ----------
+        conexiones : int | list[list[float]] | Array | SparseArray
+            El número de conexiones aleatorias a crear, o una matriz con las conexiones ya establecidas.
+            En el caso de que sea un Array o un SparseArray, este tiene que ser del backend utilizado.
+
+        semilla : int | None
+            Semilla a usar para generar valores aleatorios si conexiones es un entero.
+
+        Raises
+        ------
+        TypeError
+            Si semilla no es un entero o conexiones no es ningún tipo aceptado. 
+        """
         # Matriz aleatoria con número de conexiones especificado
         if isinstance(conexiones, int):
-            # Comprobación del tipo de semilla
+            # Comprobación de semilla
             if semilla is not None and not isinstance(semilla, int):
                 raise TypeError("La semilla debe ser un entero.")
             
-            self.__crear_conexiones_aleatorias(conexiones, semilla)
+            self._crear_conexiones_aleatorias(conexiones, semilla)
         # Matriz a partir de una lista
         elif isinstance(conexiones, list):
             if self.__sparse:
@@ -227,26 +322,12 @@ class RedDeNeuronas:
             else:
                 self.__conexiones = self.__xp.asarray(conexiones.toarray(), dtype=self.__dtype)
         else:
-            raise TypeError("El parámetro 'conexiones' debe ser un entero, una matriz formada por listas \
-                            o un array, ambos en forma de matriz cuadrada; o una matriz dispersa, todo \
-                            ello del mismo backend indicado.")
-        
-        # Comprobaciones de la matriz de conexiones
-        if self.__conexiones.shape != (self.__num_neuronas, self.__num_neuronas):
-            raise ValueError("Dimensiones incorrectas de la matriz de conexiones.")
-        
-        if self.__sparse:
-            if self.__conexiones.diagonal().any():
-                raise ValueError("La diagonal de la matriz de conexiones debe ser cero.")
-        else:
-            if self.__xp.any(self.__xp.diag(self.__conexiones)):
-                raise ValueError("La diagonal de la matriz de conexiones debe ser cero.")
-
-        # Guardar número de conexiones que hayan.
-        self.__num_conexiones = self.__conexiones.nnz if self.__sparse else int(self.__xp.count_nonzero(self.__conexiones))
+            raise TypeError("El parámetro 'conexiones' debe ser un entero, una matriz formada por "
+                            "listas o un array, ambos en forma de matriz cuadrada; o una matriz dispersa,"
+                            " todo ello del mismo backend indicado.")
 
 
-    def __crear_conexiones_aleatorias(self, num: int, semilla: int | None = None) -> None:
+    def _crear_conexiones_aleatorias(self, num: int, semilla: int | None = None) -> None:
         """
         Crear un número especificado de conexiones aleatorias con pesos aleatorios.
 
@@ -281,7 +362,8 @@ class RedDeNeuronas:
         # Caso sin conexiones
         if num == 0:
             if self.__sparse:
-                self.__conexiones = self.__sp.csr_matrix((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
+                self.__conexiones = self.__sp.csr_matrix((self.__num_neuronas, self.__num_neuronas),
+                                                         dtype=self.__dtype)
             else:
                 self.__conexiones = xp.zeros((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
             return
@@ -319,6 +401,31 @@ class RedDeNeuronas:
             self.__conexiones[filas, columnas] = pesos
 
 
+    def _validar_conexiones(self) -> None:
+        """
+        Validar que la matriz de conexiones se haya creado correctamente, y que no tenga valores poco
+        realistas.
+
+        Raises
+        ------
+        ValueError
+            - Si las dimensiones de la matriz son incorrectas.
+            - Si la diagonal principal de la matriz no es 0.
+            - Si alguno de los pesos está fuera del intervalo (-1, 1)
+        """
+        if self.__conexiones.shape != (self.__num_neuronas, self.__num_neuronas):
+            raise ValueError("Dimensiones incorrectas de la matriz de conexiones.")
+        
+        if self.__conexiones.diagonal().any():
+            raise ValueError("La diagonal de la matriz de conexiones debe ser cero.")
+
+        valores_erroneos = ((self.__conexiones <= -1) | (self.__conexiones >= 1))
+
+        if valores_erroneos.any():
+            raise ValueError("Los pesos de las conexiones deben estar en el intervalo (-1, 1).")
+
+
+
     def actualizar(self, I: Array | float | int, dt: float = 0.5) -> Array:
         """
         Avanza un paso temporal de la simulación y actualiza el estado de todas las neuronas.
@@ -330,12 +437,12 @@ class RedDeNeuronas:
             corriente a todas las neuronas o un vector de longitud igual al número de neuronas.
 
         dt : float
-            Tamaño del paso temporal.
+            Tamaño del paso temporal en milisegundos.
 
         Returns
         -------
         Array
-            Vector booleano de longitud num_neuronas indicando qué neuronas se han disparado.
+            Vector booleano de longitud num_neuronas indicando qué neuronas se han disparado al inicio del paso.
 
         Raises
         ------
@@ -357,18 +464,23 @@ class RedDeNeuronas:
 
         es_spike = (self.__v >= 30)
 
+        if es_spike.any():
+            self.__v[es_spike] = self.__c[es_spike]
+            self.__u[es_spike] += self.__d[es_spike]
+
         if isinstance(I, (np.ndarray, cp.ndarray)):
             if I.shape != (self.__num_neuronas,):
-                raise ValueError("El input de corriente debe ser un vector de longitud N, donde N es el \
-                                 número total de neuronas, o ser un número a usar para aplicar el mismo \
-                                 input a todas las neuronas.")
+                raise ValueError("La entrada de corriente debe ser un vector de longitud N, donde N "
+                                 "es el número total de neuronas, o ser un número a usar para aplicar"
+                                 " la misma corriente a todas las neuronas.")
             I = self.__xp.asarray(I, dtype=self.__dtype)
         elif not isinstance(I, Real):
-            raise TypeError("El input de corriente debe ser un vector de longitud N, donde N es el \
-                             número total de neuronas, o ser un número a usar para aplicar el mismo \
-                             input a todas las neuronas.")
+            raise TypeError("La entrada de corriente debe ser un vector de longitud N, donde N es el "
+                            "número total de neuronas, o ser un número a usar para aplicar el mismo"
+                            " la misma corriente a todas las neuronas.")
         elif isinstance(I, Real):
-            # cambiar I al dtype interno, para evitar que se haga promoción dentro de los arrays de v y de u a float64.
+            # cambiar I al dtype interno, para evitar que se haga promoción dentro de los arrays de
+            # v y de u a float64.
             I = self.__dtype.type(I)
         
         if not isinstance(dt, Real):
@@ -377,18 +489,17 @@ class RedDeNeuronas:
         if dt <= 0:
             raise ValueError("El paso temporal debe ser positivo.")
 
-        # cambiar dt al dtype interno, para evitar que se haga promoción dentro de los arrays de v y de u a float64.
+        # cambiar dt al dtype interno, para evitar que se haga promoción dentro de los arrays de v
+        # y de u a float64.
         dt = self.__dtype.type(dt)
 
         I_total = self.__conexiones.dot(es_spike.astype(self.__dtype)) + I
 
-        # Evitar posibles asignaciones intermedias de elevar al cuadrado haciendo la multiplicación directamente
+        # Evitar posibles asignaciones intermedias de elevar al cuadrado haciendo la multiplicación
+        # directamente
         self.__v += dt * ((0.04 * self.__v * self.__v + 5 * self.__v + 140 - self.__u + I_total))
         self.__u += dt * (self.__a * (self.__b * self.__v - self.__u))
-
-        if es_spike.any():
-            self.__v[es_spike] = self.__c[es_spike]
-            self.__u[es_spike] += self.__d[es_spike]
+        
         return es_spike
     
 
@@ -404,8 +515,8 @@ class RedDeNeuronas:
 
     def establecer_estado(self, v: Array | None = None, u: Array | None = None) -> None:
         """
-        Establece el estado interno v y/o u de la red en nuevos valores. Pudiendo actualizar solo uno de los
-        dos estados o ninguno.
+        Establece el estado interno v y/o u de la red en nuevos valores. Pudiendo actualizar solo
+        uno de los dos estados o ninguno.
 
         Parameters
         ----------
@@ -426,31 +537,37 @@ class RedDeNeuronas:
         
         if v is not None:
             if not isinstance(v, (np.ndarray, cp.ndarray)):
-                raise TypeError("El vector de potenciales de membrana nuevo debe ser un vector de NumPy o de CuPy.")
+                raise TypeError("El vector de potenciales de membrana nuevo debe ser un vector de "
+                                "NumPy o de CuPy.")
             
             if v.shape != (self.__num_neuronas,):
-                raise ValueError(f"El vector de potenciales de membrana tiene que tener una longitud \
-                                 de {self.__num_neuronas} elementos.")
+                raise ValueError(f"El vector de potenciales de membrana tiene que tener una longitud"
+                                 f" de {self.__num_neuronas} elementos.")
+            
             self.__v[:] = self.__xp.asarray(v, dtype=self.__dtype)
 
         if u is not None:
             if not isinstance(u, (np.ndarray, cp.ndarray)):
-                raise TypeError("El vector de variables de recuperación nuevo debe ser un vector de NumPy o de CuPy.")
+                raise TypeError("El vector de variables de recuperación nuevo debe ser un vector de"
+                                " NumPy o de CuPy.")
             
             if u.shape != (self.__num_neuronas,):
-                raise ValueError(f"El vector de variables de recuperación tiene que tener una longitud \
-                                 de {self.__num_neuronas} elementos.")
+                raise ValueError(f"El vector de variables de recuperación tiene que tener una longitud"
+                                 f" de {self.__num_neuronas} elementos.")
+            
             self.__u[:] = self.__xp.asarray(u, dtype=self.__dtype)
     
 
-    def convertir_backend(self, nuevo_backend: Literal["numpy", "cupy"]) -> RedDeNeuronas:
+    def convertir_backend(self, backend: Literal["numpy", "cupy"]) -> RedDeNeuronas:
         """
-        Crear una copia de la red actual con el backend especificado, conservando también su estado actual.
+        Crear una copia de la red actual con el backend especificado, conservando también su estado
+        actual.
 
         Parameters
         ----------
-        nuevo_backend : Literal["numpy", "cupy"]
-            El backend a utilizar en la copia de la red, se aceptan variantes con mayúsculas.
+        backend : Literal["numpy", "cupy"]
+            El backend a utilizar en la copia de la red, se aceptan variantes con mayúsculas como
+            "NuMPy" o "Cupy ".
         
         Returns
         -------
@@ -458,19 +575,25 @@ class RedDeNeuronas:
             Una copia de la red actual con el nuevo backend especificado.
         """
 
-        nuevo_backend = nuevo_backend.lower().strip()
+        nuevo_backend = backend.lower().strip()
+        conexiones = 0
         
         if nuevo_backend == self.backend:
             conexiones = self.__conexiones.copy()
         elif nuevo_backend == "numpy":
+            # Backend actual CuPy a NumPy
             conexiones = self.__conexiones.get()
-        else: # cupy
+        elif nuevo_backend == "cupy":
+            # Backend actual NumPy a CuPy
             if self.__sparse:
                 conexiones = cpsp.csr_matrix(self.__conexiones)
             else:
                 conexiones = cp.asarray(self.__conexiones)
+        
+        # En el caso de que backend no sea numpy ni cupy, se detectará al principio del constructor
             
-        nueva_red = RedDeNeuronas(self.__neuronas.copy(), conexiones, nuevo_backend, self.__precision, self.__sparse)
+        nueva_red = RedDeNeuronas(self.__neuronas.copy(), conexiones, nuevo_backend, self.__precision,
+                                  self.__sparse)
 
         nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
 
@@ -484,14 +607,16 @@ class RedDeNeuronas:
         Parameters
         ----------
         nuevo_sparse : bool
-            Nuevo formato de la matriz, puede ser una matriz dispersa por filas (csr) o una matriz densa.
+            Nuevo formato de la matriz, puede ser una matriz dispersa csr o una matriz
+            densa.
         
         Returns
         -------
         RedDeNeuronas
             Copia de la red, con el nuevo formato de la matriz de conexiones.
         """
-        nueva_red = RedDeNeuronas(self.__neuronas.copy(), self.__conexiones.copy(), self.backend, self.__precision, nuevo_sparse)
+        nueva_red = RedDeNeuronas(self.__neuronas.copy(), self.__conexiones.copy(), self.backend,
+                                  self.__precision, nuevo_sparse)
 
         nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
 
@@ -510,41 +635,42 @@ class RedDeNeuronas:
         Returns
         -------
         tuple[Array, Array]
-            Tupla con los vectores de potencial de membrana (v) y de recuperación (u) de todas las neuronas.
+            Tupla con los vectores de potencial de membrana (v) y de recuperación (u) de todas las
+            neuronas.
         """
         return self.__v, self.__u
 
 
     @property
-    def estado(self) -> dict[str, Array]:
+    def estado(self) -> dict[str, list]:
         """
         Obtiene el estado actual de la red en los vectores v y u.
 
         Returns
         -------
-        dict[str, Array]
-            Diccionario con claves v y u, donde cada valor es un vector del estado de cada neurona.
+        dict[str, list]
+            Diccionario con claves v y u, donde cada valor es una lista con el estado de cada neurona.
         """
         return {
-            "v": self.__v.copy(),
-            "u": self.__u.copy()
+            "v": self.__v.tolist(),
+            "u": self.__u.tolist()
         }
 
     @property
-    def parametros(self) -> dict[str, Array]:
+    def parametros(self) -> dict[str, list]:
         """
         Obtiene los parámetros (a, b, c, d) de todas las neuronas.
 
         Returns
         -------
-        dict[str, Array]
-            Diccionario con los cuatro parámetros del modelo de Izhikevich (a, b, c, d) para cada neurona.
+        dict[str, list]
+            Diccionario con los cuatro parámetros (a, b, c, d) de cada neurona.
         """
         return {
-            "a": self.__a.copy(),
-            "b": self.__b.copy(),
-            "c": self.__c.copy(),
-            "d": self.__d.copy()
+            "a": self.__a.tolist(),
+            "b": self.__b.tolist(),
+            "c": self.__c.tolist(),
+            "d": self.__d.tolist()
         }
     
     @property
@@ -580,23 +706,28 @@ class RedDeNeuronas:
         -------
         dict[Neurona, int]
             Copia del diccionario original que asocia cada objeto Neurona con el número de instancias
-            de ese tipo. Las cadenas de tipos se han convertido a instancias de Neurona al crear la red.
+            de ese tipo. Las cadenas de tipos se han convertido a instancias de Neurona al crear la
+            red.
         """
         return self.__neuronas.copy()
 
     @property
-    def conexiones(self) -> Array | SparseArray:
+    def conexiones(self) -> list[list[float]]:
         """
-        Obtiene la matriz de pesos sinápticos de la red.
+        Obtiene la matriz de pesos sinápticos de la red, devolviendola siempre en forma de matriz densa
+        formada por listas de listas.
 
         Returns
         -------
-        Array | SparseArray
-            Matriz cuadrada de tamaño num_neuronas x num_neuronas donde cada valor representa
-            el peso de la conexión de una neurona presináptica (columnas) a una postsináptica (filas).
-            La diagonal es siempre cero.
+        list[list[float]]
+            Matriz cuadrada de tamaño num_neuronas x num_neuronas donde cada valor representa el peso
+            de la conexión de una neurona presináptica (columnas) a una postsináptica (filas). La
+            diagonal es siempre cero.
         """
-        return self.__conexiones.copy()
+        if self.__sparse:
+            return self.__conexiones.toarray().tolist()
+        else:
+            return self.__conexiones.tolist()
 
     @property
     def num_neuronas(self) -> int:
@@ -637,11 +768,11 @@ class RedDeNeuronas:
     @property
     def sparse(self) -> bool:
         """
-        Indica si las conexiones utilizan una representación dispersa CSR.
+        Indica si las conexiones utilizan una representación dispersa por filas CSR.
 
         Returns
         -------
         bool
-            True si la matriz de conexiones está almacenada como sparse CSR.
+            True si la matriz de conexiones está almacenada como una matriz CSR.
         """
         return self.__sparse
