@@ -115,14 +115,16 @@ class Simulador:
         Raises
         ------
         ValueError
-            Si ya hay otra red o una neurona cargada en el simulador, o si la red a cargar no es una
-            instancia de RedDeNeuronas.
+            Si ya hay otra red o una neurona cargada en el simulador.
+        
+        TypeError
+            Si la red a cargar no es una instancia de RedDeNeuronas.
         """
         if self.__red is not None:
             raise ValueError("Ya hay una neurona o red cargada. Limpia el simulador primero.")
 
         if not isinstance(red, RedDeNeuronas):
-            raise ValueError("Solo se puede cargar una RedDeNeuronas con este método.")
+            raise TypeError("Solo se puede cargar una RedDeNeuronas con este método.")
         
         self.__red = red
         self.__num_neuronas = self.__red.num_neuronas
@@ -140,14 +142,16 @@ class Simulador:
         Raises
         ------
         ValueError
-            Si ya hay otra neurona o una red de neuronas cargada en el simulador, o si la neurona a
-            cargar no es una instancia de Neurona.
+            Si ya hay otra neurona o una red de neuronas cargada en el simulador.
+        
+        TypeError
+            Si la neurona a cargar no es una instancia de Neurona.
         """
         if self.__red is not None:
             raise ValueError("Ya hay una neurona o red cargada. Limpia el simulador primero.")
         
         if not isinstance(neurona, Neurona):
-            raise ValueError("Solo se puede cargar una Neurona con este método.")
+            raise TypeError("Solo se puede cargar una Neurona con este método.")
         
         self.__red = neurona
         self.__num_neuronas = 1
@@ -201,18 +205,20 @@ class Simulador:
         
         if not isinstance(medir_rendimiento, bool):
             raise TypeError("medir_rendimiento debe ser un booleano.")
-        
-        if not isinstance(intervalo_rendimiento, int):
-            raise TypeError("El intervalo de recogida de valores de rendimiento debe ser un entero.")
-        
-        if intervalo_rendimiento <= 0:
-            raise ValueError("El intervalo de recogida de valores de rendimientos debe ser positivo.")
-        
-        if not isinstance(tamano_batch, int):
-            raise TypeError("El tamaño del batch de gpu debe ser un entero.")
-        
-        if tamano_batch <= 0:
-            raise ValueError("El tamaño del batch debe ser un entero positivo.")
+
+        if medir_rendimiento:
+            if not isinstance(intervalo_rendimiento, int):
+                raise TypeError("El intervalo de recogida de valores de rendimiento debe ser un entero.")
+            
+            if intervalo_rendimiento <= 0:
+                raise ValueError("El intervalo de recogida de valores de rendimientos debe ser positivo.")
+
+        if self.__red.uso_gpu:
+            if not isinstance(tamano_batch, int):
+                raise TypeError("El tamaño del batch de gpu debe ser un entero.")
+            
+            if tamano_batch <= 0:
+                raise ValueError("El tamaño del batch debe ser un entero positivo.")
 
 
     def _actualizar_rendimiento(self, barra: tqdm | None, process: psutil.Process,
@@ -309,7 +315,7 @@ class Simulador:
         return (muestras, cpu_suma, cpu_max, ram_suma, ram_max, gpu_suma, gpu_max, vram_suma, vram_max)
 
 
-    def simular(self, pasos: int = 1000, I: float | Array = 0 , guardar_resultados: bool = False,
+    def simular(self, pasos: int = 1000, I: float | list[float] | Array = 0 , guardar_resultados: bool = False,
                 path_guardado: str | None = None, mostrar_progreso: bool = False, medir_rendimiento: bool = False,
                 intervalo_rendimiento: int = 100, tamano_batch: int = 100) -> float:
         """
@@ -324,7 +330,7 @@ class Simulador:
             se guardará el estado actual como estado inicial, si ya hay estados guardados en el historial,
             no se guardará nada. Por defecto se simularán 1000 pasos.
 
-        I : float | Array
+        I : float | list[float] | Array
             Corriente de entrada para las neuronas.
 
         guardar_resultados : bool
@@ -388,6 +394,11 @@ class Simulador:
         # Si el tamaño es 0, cambiarlo a 1 para poder guardar el estado inicial en paso_actual = 0
         if nuevo_tamano == 0:
             nuevo_tamano = 1
+
+        # Si se empieza desde paso actual = 0, y se queire simular algo, sumar 1 al tamaño para que
+        # quepa el estado inicial también
+        if paso_actual == 0 and pasos > 0:
+            nuevo_tamano += 1
         
         shape_historial = (nuevo_tamano, self.__num_neuronas)
 
@@ -412,6 +423,9 @@ class Simulador:
         # 3. Guardar el estado inicial si estamos en el paso cero
         if paso_actual == 0:
             v_actual, u_actual = red._estado()
+            if self.__red.uso_gpu:
+                v_actual = v_actual.get()
+                u_actual = u_actual.get()
             historial_spikes[0] = False
             historial_v[0] = np.asarray(v_actual)
             historial_u[0] = np.asarray(u_actual)
@@ -681,8 +695,17 @@ class Simulador:
                            a listas estándar. Guardando un solo archivo.
                 - "csv" : Valores separados por comas. Estructura los datos de forma tabular (aplanada).
                           Guardando un archivo para cada historial.
+        
+        Notes
+        -----
+        En el caso de que el formato elegido para guardar los historiales sea csv o txt, se guardará
+        cada historial en un archivo distinto, añadiendo _X al final del nombre de archivo pasado,
+        donde X es spikes, v o u.
+
+        Si la red cargada tiene una sola neurona, o se ha cargado una neurona, los historiales se
+        aplanarán a vectores antes de guardarse.
         """
-        if self.__historial_v is None or self.__historial_u is None:
+        if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
             print("No hay datos en el historial para guardar.")
             return
         
@@ -706,7 +729,7 @@ class Simulador:
         v_data = self.__historial_v[:, 0] if self.__num_neuronas == 1 else self.__historial_v
         u_data = self.__historial_u[:, 0] if self.__num_neuronas == 1 else self.__historial_u
 
-        # 3. Exportar según el formato elegido
+        # 3. Exportar según el formato
         if formato == "npz":
             np.savez_compressed(filepath, spikes=spikes_data, v=v_data, u=u_data)
             print(f"Historial guardado exitosamente en: {filepath}")
@@ -735,7 +758,7 @@ class Simulador:
             import json
             estructura_json = {"spikes": spikes_data.tolist(), "v": v_data.tolist(), "u": u_data.tolist()}
             with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(estructura_json, f)
+                json.dump(estructura_json, f, indent=2)
             print(f"Historial guardado exitosamente en: {filepath}")
     
 
@@ -793,6 +816,20 @@ class Simulador:
     def rendimiento(self) -> dict[str, float | None]:
         """
         Todos los valores de rendimiento actuales, si no se ha recogido alguno, aparecerá como None.
+
+        Estos valores son:
+        - tiempo
+        - cpu_media
+        - cpu_maxima
+        - ram_media
+        - ram_maxima
+        - gpu_media
+        - gpu_maxima
+        - vram_media
+        - vram_maxima
+
+        Representan el timepo de ejecución, y los valores de uso de recursos como cpu, memoria ram,
+        etc. medios y máximos de la última simulación.
 
         Returns
         -------

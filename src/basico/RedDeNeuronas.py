@@ -238,6 +238,10 @@ class RedDeNeuronas:
             # Convertir cadena a instancia de Neurona
             if isinstance(neurona, str):
                 neurona = Neurona.predefinida(neurona)
+
+            # Crear copia de la neurona, para evitar que se pueda acceder desde el diccionario de
+            # la red
+            neurona = neurona.copy()
                 
             self.__neuronas[neurona] = cantidad
 
@@ -419,20 +423,23 @@ class RedDeNeuronas:
         if self.__conexiones.diagonal().any():
             raise ValueError("La diagonal de la matriz de conexiones debe ser cero.")
 
-        valores_erroneos = ((self.__conexiones <= -1) | (self.__conexiones >= 1))
+        if self.__sparse:
+            datos = self.__conexiones.data
+        else:
+            datos = self.__conexiones
 
-        if valores_erroneos.any():
+        if self.__xp.any((datos <= -1) | (datos >= 1)):
             raise ValueError("Los pesos de las conexiones deben estar en el intervalo (-1, 1).")
 
 
 
-    def actualizar(self, I: Array | float | int, dt: float = 0.5) -> Array:
+    def actualizar(self, I: Array | list[float] | float | int, dt: float = 0.5) -> Array:
         """
         Avanza un paso temporal de la simulación y actualiza el estado de todas las neuronas.
 
         Parameters
         ----------
-        I : Array | float | int
+        I : Array | list[float] | float | int
             Corriente de entrada aplicada a cada neurona. Puede ser un escalar para aplicar la misma
             corriente a todas las neuronas o un vector de longitud igual al número de neuronas.
 
@@ -442,7 +449,7 @@ class RedDeNeuronas:
         Returns
         -------
         Array
-            Vector booleano de longitud num_neuronas indicando qué neuronas se han disparado al inicio del paso.
+            Vector booleano de longitud num_neuronas indicando qué neuronas se han disparado.
 
         Raises
         ------
@@ -462,14 +469,14 @@ class RedDeNeuronas:
             I_total = conexiones · spikes + I
         """
 
-        es_spike = (self.__v >= 30)
-
-        if es_spike.any():
-            self.__v[es_spike] = self.__c[es_spike]
-            self.__u[es_spike] += self.__d[es_spike]
-
         if isinstance(I, (np.ndarray, cp.ndarray)):
             if I.shape != (self.__num_neuronas,):
+                raise ValueError("La entrada de corriente debe ser un vector de longitud N, donde N "
+                                 "es el número total de neuronas, o ser un número a usar para aplicar"
+                                 " la misma corriente a todas las neuronas.")
+            I = self.__xp.asarray(I, dtype=self.__dtype)
+        elif isinstance(I, list):
+            if len(I) != self.__num_neuronas:
                 raise ValueError("La entrada de corriente debe ser un vector de longitud N, donde N "
                                  "es el número total de neuronas, o ser un número a usar para aplicar"
                                  " la misma corriente a todas las neuronas.")
@@ -481,26 +488,34 @@ class RedDeNeuronas:
         elif isinstance(I, Real):
             # cambiar I al dtype interno, para evitar que se haga promoción dentro de los arrays de
             # v y de u a float64.
-            I = self.__dtype.type(I)
+            I = self.__dtype(I)
         
         if not isinstance(dt, Real):
             raise TypeError("El paso temporal debe ser un número real.")
         
         if dt <= 0:
             raise ValueError("El paso temporal debe ser positivo.")
+        
+        spikes_previos = (self.__v >= 30)
+
+        if spikes_previos.any():
+            self.__v[spikes_previos] = self.__c[spikes_previos]
+            self.__u[spikes_previos] += self.__d[spikes_previos]
 
         # cambiar dt al dtype interno, para evitar que se haga promoción dentro de los arrays de v
         # y de u a float64.
-        dt = self.__dtype.type(dt)
+        dt = self.__dtype(dt)
 
-        I_total = self.__conexiones.dot(es_spike.astype(self.__dtype)) + I
+        I_total = self.__conexiones.dot(spikes_previos.astype(self.__dtype)) + I
 
         # Evitar posibles asignaciones intermedias de elevar al cuadrado haciendo la multiplicación
         # directamente
         self.__v += dt * ((0.04 * self.__v * self.__v + 5 * self.__v + 140 - self.__u + I_total))
         self.__u += dt * (self.__a * (self.__b * self.__v - self.__u))
         
-        return es_spike
+        spikes_actuales = (self.__v >= 30)
+
+        return spikes_actuales
     
 
     def reiniciar(self) -> None:
@@ -513,50 +528,58 @@ class RedDeNeuronas:
         self.__u[:] = self.__u_inicial
     
 
-    def establecer_estado(self, v: Array | None = None, u: Array | None = None) -> None:
+    def establecer_estado(self, v: Array | list[float] | None = None, u: Array | list[float] | None = None) -> None:
         """
         Establece el estado interno v y/o u de la red en nuevos valores. Pudiendo actualizar solo
         uno de los dos estados o ninguno.
 
         Parameters
         ----------
-        v : Array | None, optional
+        v : Array | list[float] | None, optional
             Nuevo vector de potenciales de membrana. Si es None, no se modifica v.
 
-        u : Array | None, optional
+        u : Array | list[float] | None, optional
             Nuevo vector de variables de recuperación. Si es None, no se modifica u.
 
         Raises
         ------
         TypeError
-            Si alguno de los vectores no es un array de NumPy o de CuPy.
+            Si alguno de los vectores no es un array de NumPy o de CuPy ni una lista.
 
         ValueError
             Si alguno de los vectores no tiene longitud igual a num_neuronas.
         """
-        
+
         if v is not None:
-            if not isinstance(v, (np.ndarray, cp.ndarray)):
+            if isinstance(v, (np.ndarray, cp.ndarray)):
+                if v.shape != (self.__num_neuronas,):
+                    raise ValueError("El vector de potenciales de membrana tiene que tener una longitud"
+                                    f" de {self.__num_neuronas} elementos.")
+            elif isinstance(v, list):
+                if len(v) != self.__num_neuronas:
+                    raise ValueError("El vector de potenciales de mebrana tiene que tener una longitud"
+                                    f" de {self.__num_neuronas} elementos.")
+            else:
                 raise TypeError("El vector de potenciales de membrana nuevo debe ser un vector de "
-                                "NumPy o de CuPy.")
-            
-            if v.shape != (self.__num_neuronas,):
-                raise ValueError(f"El vector de potenciales de membrana tiene que tener una longitud"
-                                 f" de {self.__num_neuronas} elementos.")
-            
+                                "NumPy o de CuPy, o una lista de números.")
+
             self.__v[:] = self.__xp.asarray(v, dtype=self.__dtype)
 
         if u is not None:
-            if not isinstance(u, (np.ndarray, cp.ndarray)):
+            if isinstance(u, (np.ndarray, cp.ndarray)):
+                if u.shape != (self.__num_neuronas,):
+                    raise ValueError("El vector de variables de recuperación tiene que tener una longitud"
+                                    f" de {self.__num_neuronas} elementos.")
+            elif isinstance(u, list):
+                if len(u) != self.__num_neuronas:
+                    raise ValueError("El vector de variables de recuperación tiene que tener una longitud"
+                                    f" de {self.__num_neuronas} elementos.")
+            else:
                 raise TypeError("El vector de variables de recuperación nuevo debe ser un vector de"
-                                " NumPy o de CuPy.")
-            
-            if u.shape != (self.__num_neuronas,):
-                raise ValueError(f"El vector de variables de recuperación tiene que tener una longitud"
-                                 f" de {self.__num_neuronas} elementos.")
-            
+                                " NumPy o de CuPy, o una lista de números.")
+
             self.__u[:] = self.__xp.asarray(u, dtype=self.__dtype)
-    
+
 
     def convertir_backend(self, backend: Literal["numpy", "cupy"]) -> RedDeNeuronas:
         """
@@ -595,7 +618,7 @@ class RedDeNeuronas:
         nueva_red = RedDeNeuronas(self.__neuronas.copy(), conexiones, nuevo_backend, self.__precision,
                                   self.__sparse)
 
-        nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
+        nueva_red.establecer_estado(**self.estado)
 
         return nueva_red
 
@@ -621,6 +644,41 @@ class RedDeNeuronas:
         nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
 
         return nueva_red
+
+    def cambiar_precision(self, nueva_precision: int) -> RedDeNeuronas:
+        """
+        Crear una copia de la red actual, con la nueva precisión para los datos guardados, conservando
+        también su estado actual.
+
+        Parameters
+        ----------
+        nueva_precision : int
+            Nueva precisión de los parámetros y el estado guardados.
+        
+        Returns
+        -------
+        RedDeNeuronas
+            Copia de la red, con la nueva precisión.
+        """
+        nueva_red = RedDeNeuronas(self.__neuronas.copy(), self.__conexiones.copy(), self.backend,
+                                  nueva_precision, self.__sparse)
+
+        nueva_red.establecer_estado(self.__v.copy(), self.__u.copy())
+
+        return nueva_red
+
+    def copy(self) -> RedDeNeuronas:
+        """
+        Devuelve una copia de esta red. Es equivalente a red.convertir_backend(red.backend) o
+        red.convertir_formato(red.sparse)
+
+        Returns
+        -------
+        RedDeNeuronas
+            Copia de la red de neuronas actual
+        """
+        return RedDeNeuronas(self.__neuronas.copy(), self.__conexiones.copy(), self.backend,
+                             self.__precision, self.__sparse)
     
 
     def _estado(self) -> tuple[Array, Array]:
