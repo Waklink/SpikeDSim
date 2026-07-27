@@ -62,6 +62,10 @@ def test_neurona_y_red_de_una_neurona_misma_evolucion():
     assert np.array_equal(hist_n["spikes"], hist_red["spikes"])
     assert np.allclose(hist_n["v"], hist_red["v"])
     assert np.allclose(hist_n["u"], hist_red["u"])
+    assert np.allclose(hist_n["I"], hist_red["I"])
+    assert hist_n["metadatos"]["nombre"] == hist_red["metadatos"]["nombre"]
+    assert hist_n["metadatos"]["es_excitatoria"] == hist_red["metadatos"]["es_excitatoria"]
+    assert hist_n["metadatos"]["dt"] == hist_red["metadatos"]["dt"]
 
 @pytest.mark.skipif(not CUPY_DISPONIBLE, reason="CuPy/GPU no disponible.")
 def test_red_neurona_numpy_y_cupy_misma_evolucion():
@@ -84,3 +88,7 @@ def test_red_neurona_numpy_y_cupy_misma_evolucion():
     assert np.array_equal(hist_red_np["spikes"], hist_red_cp["spikes"])
     assert np.allclose(hist_red_np["v"], hist_red_cp["v"])
     assert np.allclose(hist_red_np["u"], hist_red_cp["u"])
+    assert np.allclose(hist_red_np["I"], hist_red_cp["I"])
+    assert hist_red_np["metadatos"]["nombre"] == hist_red_cp["metadatos"]["nombre"]
+    assert hist_red_np["metadatos"]["es_excitatoria"] == hist_red_cp["metadatos"]["es_excitatoria"]
+    assert hist_red_np["metadatos"]["dt"] == hist_red_cp["metadatos"]["dt"]

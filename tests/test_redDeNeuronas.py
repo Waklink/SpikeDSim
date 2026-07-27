@@ -22,7 +22,7 @@ N3 = {"rs": 3}
 # TESTS BÁSICOS DEL CONSTRUCTOR
 # ==================================================
 
-def test_crear_red_vacia():
+def test_crear_red_basica():
     n = Neurona.predefinida("rs")
     red = RedDeNeuronas({n: 1}, precision=64)
 
@@ -38,6 +38,8 @@ def test_crear_red_vacia():
     assert neurona.nombre == n.nombre
     assert neurona.es_excitatoria == n.es_excitatoria
     assert list(red.neuronas.values())[0] == 1
+    assert red.nombre[0] == n.nombre
+    assert red.es_excitatoria[0] == n.es_excitatoria
     assert red.conexiones == [[0]]
 
     v, u = n.estado
@@ -138,7 +140,7 @@ def test_crear_con_conexiones_aleatorias():
     red = RedDeNeuronas(N3, conexiones=5)
     assert red.num_conexiones == 5
 
-def test_crear_con_semilla_para_conexiones():
+def test_crear_con_conexiones_aleatorias_usando_semilla():
     red1 = RedDeNeuronas(N3, conexiones=5, semilla=10)
     red2 = RedDeNeuronas(N3, conexiones=5, semilla=10)
     red3 = RedDeNeuronas(N3, conexiones=5, semilla=11)
@@ -238,6 +240,17 @@ def test_comprobar_conexiones_devuelve_copia():
     matriz_conexiones = red.conexiones
     matriz_conexiones[0][0] = 1
     assert red.conexiones != matriz_conexiones
+
+def test_comprobar_nombre_es_correcto():
+    n = Neurona.predefinida("rs")
+    n2 = Neurona.predefinida("fs")
+    red = RedDeNeuronas({n: 2, n2: 3})
+
+    assert red.nombre == [n.nombre] * 2 + [n2.nombre] * 3
+
+def test_comprobar_es_excitatoria_es_correcto():
+    red = RedDeNeuronas({"rs": 2, "fs": 3})
+    assert red.es_excitatoria == [True] * 2 + [False] * 3
 
 
 # ==================================================

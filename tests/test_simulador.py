@@ -64,7 +64,7 @@ def test_crear_simulador_dt_invalido(dt):
 
 
 # ==================================================
-# TESTS DE CARGA DE OBJETOS
+# TESTS DE CARGA DE NEURONAS Y REDES
 # ==================================================
 
 def test_cargar_red():
@@ -171,18 +171,21 @@ def test_simular_cero_pasos_guarda_estado_inicial():
     assert sim.historial["spikes"].shape == (1, 1)
     assert sim.historial["v"].shape == (1, 1)
     assert sim.historial["u"].shape == (1, 1)
+    assert sim.historial["I"].shape == (1, 1)
     assert not np.any(sim.historial["spikes"])
     assert sim.historial["v"][0,0] == pytest.approx(red.estado["v"][0])
     assert sim.historial["u"][0,0] == pytest.approx(red.estado["u"][0])
+    assert sim.historial["I"][0,0] == pytest.approx(0)
 
 def test_simular_avanza_pasos_correctamente(simulador):
     simulador.simular(pasos=10)
     assert simulador.paso_actual == 11
 
     hist = simulador.historial
+    assert hist["spikes"].shape == (11,1)
     assert hist["v"].shape == (11,1)
     assert hist["u"].shape == (11,1)
-    assert hist["spikes"].shape == (11,1)
+    assert hist["I"].shape == (11,1)
 
 def test_simular_varias_llamadas_continua_historial(simulador):
     simulador.simular(5)
@@ -194,13 +197,15 @@ def test_simular_varias_llamadas_continua_historial(simulador):
     assert simulador.paso_actual == 11
 
     hist2 = simulador.historial
+    assert hist2["spikes"].shape == (11,1)
     assert hist2["v"].shape == (11,1)
     assert hist2["u"].shape == (11,1)
-    assert hist2["spikes"].shape == (11,1)
+    assert hist2["I"].shape == (11,1)
 
     assert np.array_equal(hist1["spikes"], hist2["spikes"][:6])
     assert np.array_equal(hist1["v"], hist2["v"][:6])
     assert np.array_equal(hist1["u"], hist2["u"][:6])
+    assert np.array_equal(hist1["I"], hist2["I"][:6])
 
 def test_simular_guarda_resultados(simulador):
     nombre_archivo = "./tests/tmp/historial.npz"
@@ -303,9 +308,11 @@ def test_historial_devuelve_copia(simulador):
     hist["spikes"][0,0] = True
     hist["v"][0,0] = 0
     hist["u"][0,0] = 0
+    hist["I"][0,0] = 10
     assert not simulador.historial["spikes"][0,0]
     assert simulador.historial["v"][0,0] != 0
     assert simulador.historial["u"][0,0] != 0
+    assert simulador.historial["I"][0,0] != 10
 
 def test_historial_dtype_distinto_de_red_dtype():
     red = RedDeNeuronas({"rs": 1}, precision=64)
@@ -316,6 +323,7 @@ def test_historial_dtype_distinto_de_red_dtype():
     assert hist["spikes"].dtype == bool
     assert hist["v"].dtype == np.float32
     assert hist["u"].dtype == np.float32
+    assert hist["I"].dtype == np.float32
 
 
 # ==================================================
@@ -336,10 +344,18 @@ def test_guardar_historial_npz_red_con_1_neurona(simulador):
     assert "spikes" in datos
     assert "v" in datos
     assert "u" in datos
+    assert "nombre" in datos
+    assert "es_excitatoria" in datos
+    assert "I" in datos
+    assert "dt" in datos
 
     assert datos["spikes"].shape == (6,)
     assert datos["v"].shape == (6,)
     assert datos["u"].shape == (6,)
+    assert len(datos["nombre"]) == 1
+    assert len(datos["es_excitatoria"]) == 1
+    assert datos["I"].shape == (6,)
+    assert datos["dt"] == 0.5
 
     datos.close()
     archivo.unlink()
@@ -361,10 +377,18 @@ def test_guardar_historial_npz_red_con_2_neuronas():
     assert "spikes" in datos
     assert "v" in datos
     assert "u" in datos
+    assert "nombre" in datos
+    assert "es_excitatoria" in datos
+    assert "I" in datos
+    assert "dt" in datos
 
     assert datos["spikes"].shape == (6,2)
     assert datos["v"].shape == (6,2)
     assert datos["u"].shape == (6,2)
+    assert len(datos["nombre"]) == 2
+    assert len(datos["es_excitatoria"]) == 2
+    assert datos["I"].shape == (6,2)
+    assert datos["dt"] == 0.5
 
     datos.close()
     archivo.unlink()
@@ -387,13 +411,22 @@ def test_guardar_historial_json():
     assert "spikes" in datos
     assert "v" in datos
     assert "u" in datos
+    assert "nombre" in datos
+    assert "es_excitatoria" in datos
+    assert "I" in datos
+    assert "dt" in datos
 
     assert len(datos["spikes"]) == 6
     assert len(datos["v"]) == 6
     assert len(datos["u"]) == 6
+    assert len(datos["I"]) == 6
     assert all(len(datos["spikes"][i]) == 2 for i in range(6))
     assert all(len(datos["v"][i]) == 2 for i in range(6))
     assert all(len(datos["u"][i]) == 2 for i in range(6))
+    assert all(len(datos["I"][i]) == 2 for i in range(6))
+    assert len(datos["nombre"]) == 2
+    assert len(datos["es_excitatoria"]) == 2
+    assert datos["dt"] == 0.5
 
     archivo.unlink()
 
@@ -409,14 +442,30 @@ def test_guardar_historial_csv(simulador):
     archivo_v = archivo_v.with_name(f"{archivo_v.stem}_v.csv")
     archivo_u = Path(nombre_archivo)
     archivo_u = archivo_u.with_name(f"{archivo_u.stem}_u.csv")
+    archivo_nombres = Path(nombre_archivo)
+    archivo_nombres = archivo_nombres.with_name(f"{archivo_nombres.stem}_nombres.csv")
+    archivo_excitatorias = Path(nombre_archivo)
+    archivo_excitatorias = archivo_excitatorias.with_name(f"{archivo_excitatorias.stem}_excitatorias.csv")
+    archivo_I = Path(nombre_archivo)
+    archivo_I = archivo_I.with_name(f"{archivo_I.stem}_I.csv")
+    archivo_dt = Path(nombre_archivo)
+    archivo_dt = archivo_dt.with_name(f"{archivo_dt.stem}_dt.csv")
 
     assert archivo_spikes.exists()
     assert archivo_v.exists()
     assert archivo_u.exists()
+    assert archivo_nombres.exists()
+    assert archivo_excitatorias.exists()
+    assert archivo_I.exists()
+    assert archivo_dt.exists()
 
     archivo_spikes.unlink()
     archivo_v.unlink()
     archivo_u.unlink()
+    archivo_nombres.unlink()
+    archivo_excitatorias.unlink()
+    archivo_I.unlink()
+    archivo_dt.unlink()
 
 def test_guardar_historial_txt(simulador):
     simulador.simular(5)
@@ -430,14 +479,30 @@ def test_guardar_historial_txt(simulador):
     archivo_v = archivo_v.with_name(f"{archivo_v.stem}_v.txt")
     archivo_u = Path(nombre_archivo)
     archivo_u = archivo_u.with_name(f"{archivo_u.stem}_u.txt")
+    archivo_nombres = Path(nombre_archivo)
+    archivo_nombres = archivo_nombres.with_name(f"{archivo_nombres.stem}_nombres.txt")
+    archivo_excitatorias = Path(nombre_archivo)
+    archivo_excitatorias = archivo_excitatorias.with_name(f"{archivo_excitatorias.stem}_excitatorias.txt")
+    archivo_I = Path(nombre_archivo)
+    archivo_I = archivo_I.with_name(f"{archivo_I.stem}_I.txt")
+    archivo_dt = Path(nombre_archivo)
+    archivo_dt = archivo_dt.with_name(f"{archivo_dt.stem}_dt.txt")
 
     assert archivo_spikes.exists()
     assert archivo_v.exists()
     assert archivo_u.exists()
+    assert archivo_nombres.exists()
+    assert archivo_excitatorias.exists()
+    assert archivo_I.exists()
+    assert archivo_dt.exists()
 
     archivo_spikes.unlink()
     archivo_v.unlink()
     archivo_u.unlink()
+    archivo_nombres.unlink()
+    archivo_excitatorias.unlink()
+    archivo_I.unlink()
+    archivo_dt.unlink()
 
 def test_guardar_historial_sin_historial(simulador):
     nombre_archivo = "./tests/tmp/historial.npz"
@@ -500,9 +565,11 @@ def test_simular_en_gpu_historial_en_cpu():
     assert isinstance(hist["spikes"], np.ndarray)
     assert isinstance(hist["v"], np.ndarray)
     assert isinstance(hist["u"], np.ndarray)
+    assert isinstance(hist["I"], np.ndarray)
     assert hist["spikes"].dtype == bool
     assert hist["v"].dtype == np.float32
     assert hist["u"].dtype == np.float32
+    assert hist["I"].dtype == np.float32
 
 @pytest.mark.skipif(not CUPY_DISPONIBLE, reason="CuPy/GPU no disponible.")
 def test_simular_en_gpu_rendimiento_gpu_medido():

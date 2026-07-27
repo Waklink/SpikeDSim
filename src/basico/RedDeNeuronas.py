@@ -29,8 +29,14 @@ class RedDeNeuronas:
         Tipos de neuronas y su cantidad en la red. Estos tipos pueden especificarse con instancias
         de Neurona o nombres de tipos predefinidos, que se convierten a instancias al construirse la
         red.
+    
+    nombre : list[str]
+        Nombres de las neuronas, en el orden en el que están en la red.
+    
+    es_excitatoria : list[bool]
+        Lista que indica si las neuronas de la red son excitatorias o inhibitorias.
 
-    conexiones : list
+    conexiones : list[list[float]]
         Matriz de pesos sinápticos con diagonal cero. Puede almacenarse como una matriz densa o
         mediante una representación dispersa CSR.
 
@@ -54,8 +60,12 @@ class RedDeNeuronas:
         Tipo de dato utilizado internamente por los arrays de la red. Puede ser float32 o
         float64 según la precisión seleccionada en el constructor.
 
-    sparse: bool
+    sparse : bool
         Indica si la matriz de conexiones se almacena utilizando una representación dispersa CSR.
+    
+    informacion_neuronas : dict[str, list[int] | list[str] | list[bool]]
+        Diccionario con información general,a  usar como metadatos de las neuronas, incluye el orden,
+        el nombre y si es excitatoria o inhibitoria de cada neurona.
     """
 
     def __init__(self, neuronas: dict[Neurona | str, int], conexiones: int | list[list[float]] | Array | SparseArray = 0,
@@ -223,6 +233,7 @@ class RedDeNeuronas:
                             "cantidad a crear.")
         
         self.__neuronas = {}
+        self.__nombre = []
         
         for neurona, cantidad in neuronas.items():
             if not isinstance(neurona, (Neurona, str)):
@@ -244,6 +255,7 @@ class RedDeNeuronas:
             neurona = neurona.copy()
                 
             self.__neuronas[neurona] = cantidad
+            self.__nombre.extend([neurona.nombre] * cantidad)
 
 
     def _crear_vectores(self) -> None:
@@ -482,9 +494,9 @@ class RedDeNeuronas:
                                  " la misma corriente a todas las neuronas.")
             I = self.__xp.asarray(I, dtype=self.__dtype)
         elif not isinstance(I, Real):
-            raise TypeError("La entrada de corriente debe ser un vector de longitud N, donde N es el "
-                            "número total de neuronas, o ser un número a usar para aplicar el mismo"
-                            " la misma corriente a todas las neuronas.")
+            raise TypeError("La entrada de corriente debe ser un vector de longitud N, donde N es el"
+                            " número total de neuronas, o ser un número a usar para aplicar la misma"
+                            " corriente a todas las neuronas.")
         elif isinstance(I, Real):
             # cambiar I al dtype interno, para evitar que se haga promoción dentro de los arrays de
             # v y de u a float64.
@@ -683,7 +695,7 @@ class RedDeNeuronas:
 
     def _estado(self) -> tuple[Array, Array]:
         """
-        Devuelve referencias directas al estado interno de la red.
+        Referencias directas al estado interno de la red.
 
         A diferencia de la propiedad estado, este método no crea copias de los datos y está destinado
         exclusivamente para uso interno del simulador.
@@ -758,7 +770,7 @@ class RedDeNeuronas:
     @property
     def neuronas(self) -> dict[Neurona, int]:
         """
-        Devuelve los tipos de neuronas y su cantidad en la red.
+        Los tipos de neuronas y su cantidad en la red.
 
         Returns
         -------
@@ -768,6 +780,30 @@ class RedDeNeuronas:
             red.
         """
         return self.__neuronas.copy()
+
+    @property
+    def nombre(self) -> list[str]:
+        """
+        Los nombre de las neuronas de la red, en el orden en el que están en la misma.
+
+        Returns
+        -------
+        list[str]
+            Lista con los nombres ordenados de las neuronas en la red.
+        """
+        return self.__nombre.copy()
+
+    @property
+    def es_excitatoria(self) -> list[bool]:
+        """
+        Indica si cada neurona de la red es excitatoria o inhibitoria.
+
+        Returns
+        -------
+        list[bool]
+            Lista donde True indica que es excitatoria y False inhibitoria.
+        """
+        return self.__tipo.tolist()
 
     @property
     def conexiones(self) -> list[list[float]]:

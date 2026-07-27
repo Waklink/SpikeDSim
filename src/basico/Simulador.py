@@ -32,13 +32,15 @@ class Simulador:
     paso_actual : int
         Índice del próximo paso a simular.
 
-    historial : dict[str, np.ndarray] | None
-        Historial de spikes y variables de estado (v y u).
-        None si aún no se ha ejecutado ninguna simulación.
-    
+    historial : dict[str, np.ndarray | dict[str, list[str] | list[bool] | float]] | None
+        Historial de spikes, variables de estado (v y u) y corriente de entrada en cada paso, siendo
+        estos None si aún no se ha ejecutado ninguna simulación. Además, también contiene información
+        adicional para facilitar la interpretación de los datos, como una lista ordenada de los nombres
+        de las neuronas cargadas, si son excitatorias o inhibitorias y el paso temporal de la simulación.
+
     rendimiento : dict[str, float | None]
         Valores de rendimiento de la última simulación ejecutada.
-    
+
     Notes
     -----
     Internamente se almacenan buffers separados para spikes, v y u en memoria CPU para evitar saturación
@@ -80,6 +82,7 @@ class Simulador:
         self.__historial_spikes = None
         self.__historial_v = None
         self.__historial_u = None
+        self.__historial_I = None
 
         # Paso actual de la simulación.
         self.__paso_actual = 0
@@ -315,6 +318,33 @@ class Simulador:
         return (muestras, cpu_suma, cpu_max, ram_suma, ram_max, gpu_suma, gpu_max, vram_suma, vram_max)
 
 
+    def _convertir_I(self, I: float | list[float] | Array) -> np.ndarray | float:
+        """
+        Convierte la corriente pasada a un vector de numpy de longitud num_neuronas.
+
+        Parameters
+        ----------
+        I : float | list[float] | Array
+            Corriente de entrada a convertir
+        """
+        if isinstance(self.__red, Neurona):
+            if not isinstance(I, Real):
+                raise TypeError("La corriente de entrada, I, debe ser un número real.")
+            return I
+        vector_I = np.empty((self.num_neuronas,), dtype=np.float32)
+        if isinstance(I, Real):
+            vector_I = np.asarray([I] * self.__num_neuronas, dtype=np.float32)
+        elif isinstance(I, (list, np.ndarray)):
+            vector_I = np.asarray(I, dtype=np.float32)
+        elif isinstance(I, cp.ndarray):
+            vector_I = I.get()
+        else:
+            raise TypeError("La entrada de corriente debe ser un vector de longitud N, donde N es el"
+                            " número total de neuronas, o ser un número a usar para aplicar la misma"
+                            " corriente a todas las neuronas.")
+        return vector_I
+
+
     def simular(self, pasos: int = 1000, I: float | list[float] | Array = 0 , guardar_resultados: bool = False,
                 path_guardado: str | None = None, mostrar_progreso: bool = False, medir_rendimiento: bool = False,
                 intervalo_rendimiento: int = 100, tamano_batch: int = 100) -> float:
@@ -385,8 +415,10 @@ class Simulador:
         historial_spikes = self.__historial_spikes
         historial_v = self.__historial_v
         historial_u = self.__historial_u
+        historial_I = self.__historial_I
         red = self.__red
         paso_actual = self.__paso_actual
+        I = self._convertir_I(I)
         
         # 2. Reservar o expandir el historial en la RAM de la CPU (NumPy)
         nuevo_tamano = paso_actual + pasos
@@ -406,6 +438,7 @@ class Simulador:
             historial_spikes = np.empty(shape_historial, dtype=bool)
             historial_v = np.empty(shape_historial, dtype=np.float32)
             historial_u = np.empty(shape_historial, dtype=np.float32)
+            historial_I = np.empty(shape_historial, dtype=np.float32)
         else:
             # Si se llama a simular() varias veces seguidas, la matriz de RAM se expande
             nuevo_spikes = np.empty(shape_historial, dtype=bool)
@@ -420,6 +453,10 @@ class Simulador:
             nuevo_u[:paso_actual] = historial_u
             historial_u = nuevo_u
 
+            nuevo_I = np.empty(shape_historial, dtype=np.float32)
+            nuevo_I[:paso_actual] = historial_I
+            historial_I = nuevo_I
+
         # 3. Guardar el estado inicial si estamos en el paso cero
         if paso_actual == 0:
             v_actual, u_actual = red._estado()
@@ -429,6 +466,7 @@ class Simulador:
             historial_spikes[0] = False
             historial_v[0] = np.asarray(v_actual)
             historial_u[0] = np.asarray(u_actual)
+            historial_I[0] = I
             paso_actual += 1
             
             # Si solo se quería registrar el estado inicial (pasos == 0), se termina la simulación
@@ -436,6 +474,7 @@ class Simulador:
                 self.__historial_spikes = historial_spikes
                 self.__historial_v = historial_v
                 self.__historial_u = historial_u
+                self.__historial_I = historial_I
                 self.__paso_actual = paso_actual
                 return 0
 
@@ -521,6 +560,7 @@ class Simulador:
                         historial_spikes[inicio_batch:inicio_batch + tamano_batch] = cp.asnumpy(buffer_spikes_gpu)
                         historial_v[inicio_batch:inicio_batch + tamano_batch] = cp.asnumpy(buffer_v_gpu)
                         historial_u[inicio_batch:inicio_batch + tamano_batch] = cp.asnumpy(buffer_u_gpu)
+                        historial_I[inicio_batch:inicio_batch + tamano_batch] = I
 
                         inicio_batch += tamano_batch
                         indice_batch = 0
@@ -540,6 +580,7 @@ class Simulador:
                     historial_spikes[inicio_batch:inicio_batch + indice_batch] = cp.asnumpy(buffer_spikes_gpu[:indice_batch])
                     historial_v[inicio_batch:inicio_batch + indice_batch] = cp.asnumpy(buffer_v_gpu[:indice_batch])
                     historial_u[inicio_batch:inicio_batch + indice_batch] = cp.asnumpy(buffer_u_gpu[:indice_batch])
+                    historial_I[inicio_batch:inicio_batch + indice_batch] = I
 
                 paso_actual += pasos
 
@@ -554,6 +595,7 @@ class Simulador:
                     historial_spikes[paso_actual] = spike_actual
                     historial_v[paso_actual] = v_actual
                     historial_u[paso_actual] = u_actual
+                    historial_I[paso_actual] = I
 
                     paso_actual += 1
 
@@ -576,6 +618,7 @@ class Simulador:
             self.__historial_spikes = historial_spikes
             self.__historial_v = historial_v
             self.__historial_u = historial_u
+            self.__historial_I = historial_I
             self.__paso_actual = paso_actual
 
             # 7. Calcular y guardar información de rendimiento en atributos de la clase.
@@ -633,6 +676,7 @@ class Simulador:
         self.__historial_spikes = None
         self.__historial_v = None
         self.__historial_u = None
+        self.__historial_I = None
         self.__paso_actual = 0
     
 
@@ -667,10 +711,39 @@ class Simulador:
         self.limpiar_rendimiento()
 
 
+    def _obtener_historial_completo(self) -> dict[str, np.ndarray | list[str] | list[bool] | float]:
+        """
+        Obtener el historial completo, sin separación entre datos y metadatos.
+
+        Returns
+        -------
+        dict[str, np.ndarray | list[str] | list[bool] | float]
+            Diccionario con los historiales de spikes, v, u e I, y las listas de nombres de las neuronas
+            cargadas y si son excitatorias o inhibitorias, y el paso temporal, dt, de la simulación.
+        """
+        if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
+            return None
+        else:
+            return {
+                "spikes": self.__historial_spikes,
+                "v": self.__historial_v,
+                "u": self.__historial_u,
+                "I": self.__historial_I,
+                # Si la red es una neurona, convertimos nombre y es_excitatoria a listas para mantener
+                # el formato de los datos consistente
+                "nombre": [self.__red.nombre] if isinstance(self.__red, Neurona) else self.__red.nombre,
+                "es_excitatoria": [self.__red.es_excitatoria] if isinstance(self.__red, Neurona) else self.__red.es_excitatoria,
+                "dt": self.__dt
+            }
+
+
     def guardar_historial(self, path: str = "./historial.npz",
                           formato: Literal["npz", "txt", "json", "csv"] | None = None) -> None:
         """
         Guardar el historial en uno o varios archivos, pudiendo elegir el formato entre varios posibles.
+        Asimismo, también se guardan metadatos para poder analizar los valores después, incluyendo
+        nombres ordenados de las neuronas que haya cargadas, si son excitatorias o inhibitorias,
+        y el paso temporal, dt, usado.
 
         En el caso de que el formato especificado, tanto en el path como en el parámetro formato, no
         esté soportado, se usará el valor por defecto.
@@ -690,11 +763,10 @@ class Simulador:
             El formato elegido para guardar los datos. Si es None, se inferirá de la extensión del
             path. Los formatos soportados son:
                 - "npz" : (Recomendado) Formato binario comprimido de NumPy/CuPy. Guardando un solo archivo.
-                - "txt" : Texto en plano. Guardando un archivo para cada historial.
                 - "json" : Formato de texto estructurado. Los arrays se convertirán automáticamente
-                           a listas estándar. Guardando un solo archivo.
-                - "csv" : Valores separados por comas. Estructura los datos de forma tabular (aplanada).
-                          Guardando un archivo para cada historial.
+                           a listas. Guardando un solo archivo.
+                - "csv" : Valores separados por comas. Guardando un archivo para cada historial y metadato.
+                - "txt" : Texto en plano. Guardando un archivo para cada historial y metadato.
         
         Notes
         -----
@@ -705,7 +777,8 @@ class Simulador:
         Si la red cargada tiene una sola neurona, o se ha cargado una neurona, los historiales se
         aplanarán a vectores antes de guardarse.
         """
-        if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
+        historial = self._obtener_historial_completo()
+        if historial is None:
             print("No hay datos en el historial para guardar.")
             return
         
@@ -725,13 +798,29 @@ class Simulador:
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
         # 2. Si es una sola neurona (columna única), aplanamos a 1D (Pasos,) para mayor comodidad
-        spikes_data = self.__historial_spikes[:, 0] if self.__num_neuronas == 1 else self.__historial_spikes
-        v_data = self.__historial_v[:, 0] if self.__num_neuronas == 1 else self.__historial_v
-        u_data = self.__historial_u[:, 0] if self.__num_neuronas == 1 else self.__historial_u
+        spikes_data = historial["spikes"][:, 0] if self.__num_neuronas == 1 else historial["spikes"]
+        v_data = historial["v"][:, 0] if self.__num_neuronas == 1 else historial["v"]
+        u_data = historial["u"][:, 0] if self.__num_neuronas == 1 else historial["u"]
+        I_data = historial["I"][:, 0] if self.__num_neuronas == 1 else historial["I"]
+
+        # Cargar los metadatos
+        nombres = historial["nombre"]
+        excitatorias = historial["es_excitatoria"]
+        paso_temporal = historial["dt"]
 
         # 3. Exportar según el formato
         if formato == "npz":
-            np.savez_compressed(filepath, spikes=spikes_data, v=v_data, u=u_data)
+            np.savez_compressed(filepath, spikes=spikes_data, v=v_data, u=u_data, I=I_data, nombre=nombres,
+                                es_excitatoria=excitatorias, dt=paso_temporal)
+            print(f"Historial guardado exitosamente en: {filepath}")
+
+        elif formato == "json":
+            import json
+            estructura_json = {"spikes": spikes_data.tolist(), "v": v_data.tolist(), "u": u_data.tolist(),
+                               "I": I_data.tolist(), "nombre": nombres, "es_excitatoria": excitatorias,
+                               "dt": paso_temporal}
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(estructura_json, f, indent=2)
             print(f"Historial guardado exitosamente en: {filepath}")
 
         elif formato == "csv":
@@ -739,28 +828,41 @@ class Simulador:
             path_spikes = filepath.with_name(f"{filepath.stem}_spikes.csv")
             path_v = filepath.with_name(f"{filepath.stem}_v.csv")
             path_u = filepath.with_name(f"{filepath.stem}_u.csv")
+            # Guardar archivos con los metadatos: nombre, es_excitatoria, I y dt
+            path_nombre = filepath.with_name(f"{filepath.stem}_nombres.csv")
+            path_excitatorias = filepath.with_name(f"{filepath.stem}_excitatorias.csv")
+            path_I = filepath.with_name(f"{filepath.stem}_I.csv")
+            path_dt = filepath.with_name(f"{filepath.stem}_dt.csv")
             np.savetxt(path_spikes, spikes_data, delimiter=",")
             np.savetxt(path_v, v_data, delimiter=",")
             np.savetxt(path_u, u_data, delimiter=",")
-            print(f"Historial guardado en archivos CSV:\n - {path_spikes}\n - {path_v}\n - {path_u}")
+            np.savetxt(path_I, I_data, delimiter=",")
+            np.savetxt(path_nombre, nombres, fmt="%s", delimiter=",")
+            np.savetxt(path_excitatorias, excitatorias, fmt="%s", delimiter=",")
+            np.savetxt(path_dt, [paso_temporal], delimiter=",")
+            print(f"Historial guardado en archivos CSV:\n  - {path_spikes}\n  - {path_v}\n  - {path_u}")
+            print(f"Con metadatos en:\n  - {path_nombre}\n  - {path_excitatorias}\n  - {path_I}\n  - {path_dt}")
 
         elif formato == "txt":
             # Texto plano separado por espacios
             path_spikes = filepath.with_name(f"{filepath.stem}_spikes.txt")
             path_v = filepath.with_name(f"{filepath.stem}_v.txt")
             path_u = filepath.with_name(f"{filepath.stem}_u.txt")
+            # Guardar archivos con los metadatos: nombre, es_excitatoria y dt
+            path_nombre = filepath.with_name(f"{filepath.stem}_nombres.txt")
+            path_excitatorias = filepath.with_name(f"{filepath.stem}_excitatorias.txt")
+            path_I = filepath.with_name(f"{filepath.stem}_I.txt")
+            path_dt = filepath.with_name(f"{filepath.stem}_dt.txt")
             np.savetxt(path_spikes, spikes_data)
             np.savetxt(path_v, v_data)
             np.savetxt(path_u, u_data)
+            np.savetxt(path_I, I_data)
+            np.savetxt(path_nombre, nombres, fmt="%s", delimiter="\n")
+            np.savetxt(path_excitatorias, excitatorias, fmt="%s", delimiter="\n")
+            np.savetxt(path_dt, [paso_temporal])
             print(f"Historial guardado en archivos de texto:\n - {path_spikes}\n - {path_v}\n - {path_u}")
-            
-        elif formato == "json":
-            import json
-            estructura_json = {"spikes": spikes_data.tolist(), "v": v_data.tolist(), "u": u_data.tolist()}
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(estructura_json, f, indent=2)
-            print(f"Historial guardado exitosamente en: {filepath}")
-    
+            print(f"Con metadatos en:\n  - {path_nombre}\n  - {path_excitatorias}\n  - {path_I}\n  - {path_dt}")
+
 
     @property
     def dt(self) -> float:
@@ -793,23 +895,32 @@ class Simulador:
         return self.__num_neuronas
 
     @property
-    def historial(self) -> dict[str, np.ndarray] | None:
+    def historial(self) -> dict[str, np.ndarray | dict[str, list[str] | list[bool] | float]]:
         """
-        Devuelve una copia de los historiales almacenados.
+        Devuelve una copia de los historiales almacenados, junto con información adicional para poder
+        interpretar los datos, como el nombre de las neuronas cargadas, si son excitatorias o inhibitorias
+        y el paso temporal de la simulación.
 
         Returns
         -------
         dict[str, np.ndarray] | None
-            Diccionario con los historiales almacenados en memoria, o None si no se ha simulado nada
-            y no están inicializados.
+            Diccionario con los historiales almacenados en memoria, o None si no se ha simulado
+            nada y no están inicializados.
         """
-        if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
+        historial = self._obtener_historial_completo()
+        if historial is None:
             return None
         else:
             return {
-                "spikes": self.__historial_spikes.copy(),
-                "v": self.__historial_v.copy(),
-                "u": self.__historial_u.copy()
+                "spikes": historial["spikes"].copy(),
+                "v": historial["v"].copy(),
+                "u": historial["u"].copy(),
+                "I": historial["I"].copy(),
+                "metadatos": {
+                    "nombre": historial["nombre"],
+                    "es_excitatoria": historial["es_excitatoria"],
+                    "dt": historial["dt"]
+                }
             }
     
     @property
