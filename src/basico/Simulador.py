@@ -32,7 +32,7 @@ class Simulador:
     paso_actual : int
         Índice del próximo paso a simular.
 
-    historial : dict[str, np.ndarray | dict[str, list[str] | list[bool] | float]] | None
+    historial : dict[str, np.ndarray | list[str] | list[bool] | float] | None
         Historial de spikes, variables de estado (v y u) y corriente de entrada en cada paso, siendo
         estos None si aún no se ha ejecutado ninguna simulación. Además, también contiene información
         adicional para facilitar la interpretación de los datos, como una lista ordenada de los nombres
@@ -711,30 +711,30 @@ class Simulador:
         self.limpiar_rendimiento()
 
 
-    def _obtener_historial_completo(self) -> dict[str, np.ndarray | list[str] | list[bool] | float]:
+    def _obtener_historial_completo(self) -> dict[str, np.ndarray | list[str] | list[bool] | float] | None:
         """
         Obtener el historial completo, sin separación entre datos y metadatos.
 
         Returns
         -------
-        dict[str, np.ndarray | list[str] | list[bool] | float]
+        dict[str, np.ndarray | list[str] | list[bool] | float] | None
             Diccionario con los historiales de spikes, v, u e I, y las listas de nombres de las neuronas
             cargadas y si son excitatorias o inhibitorias, y el paso temporal, dt, de la simulación.
         """
         if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
             return None
-        else:
-            return {
-                "spikes": self.__historial_spikes,
-                "v": self.__historial_v,
-                "u": self.__historial_u,
-                "I": self.__historial_I,
-                # Si la red es una neurona, convertimos nombre y es_excitatoria a listas para mantener
-                # el formato de los datos consistente
-                "nombre": [self.__red.nombre] if isinstance(self.__red, Neurona) else self.__red.nombre,
-                "es_excitatoria": [self.__red.es_excitatoria] if isinstance(self.__red, Neurona) else self.__red.es_excitatoria,
-                "dt": self.__dt
-            }
+        
+        return {
+            "spikes": self.__historial_spikes.copy(),
+            "v": self.__historial_v.copy(),
+            "u": self.__historial_u.copy(),
+            "I": self.__historial_I.copy(),
+            # Si la red es una neurona, convertimos nombre y es_excitatoria a listas para mantener
+            # el formato de los datos consistente
+            "nombre": [self.__red.nombre] if isinstance(self.__red, Neurona) else self.__red.nombre,
+            "es_excitatoria": [self.__red.es_excitatoria] if isinstance(self.__red, Neurona) else self.__red.es_excitatoria,
+            "dt": self.__dt
+        }
 
 
     def guardar_historial(self, path: str = "./historial.npz",
@@ -895,7 +895,7 @@ class Simulador:
         return self.__num_neuronas
 
     @property
-    def historial(self) -> dict[str, np.ndarray | dict[str, list[str] | list[bool] | float]]:
+    def historial(self) -> dict[str, np.ndarray | list[str] | list[bool] | float] | None:
         """
         Devuelve una copia de los historiales almacenados, junto con información adicional para poder
         interpretar los datos, como el nombre de las neuronas cargadas, si son excitatorias o inhibitorias
@@ -903,7 +903,7 @@ class Simulador:
 
         Returns
         -------
-        dict[str, np.ndarray] | None
+        dict[str, np.ndarray | list[str] | list[bool] | float] | None
             Diccionario con los historiales almacenados en memoria, o None si no se ha simulado
             nada y no están inicializados.
         """
@@ -912,15 +912,13 @@ class Simulador:
             return None
         else:
             return {
-                "spikes": historial["spikes"].copy(),
-                "v": historial["v"].copy(),
-                "u": historial["u"].copy(),
-                "I": historial["I"].copy(),
-                "metadatos": {
-                    "nombre": historial["nombre"],
-                    "es_excitatoria": historial["es_excitatoria"],
-                    "dt": historial["dt"]
-                }
+                "spikes": historial["spikes"],
+                "v": historial["v"],
+                "u": historial["u"],
+                "I": historial["I"],
+                "nombre": historial["nombre"],
+                "es_excitatoria": historial["es_excitatoria"],
+                "dt": historial["dt"]
             }
     
     @property

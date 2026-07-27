@@ -3,6 +3,7 @@ import numpy as np
 import cupy as cp
 
 from pathlib import Path
+import shutil
 import json
 
 from src.basico.Neurona import Neurona
@@ -15,6 +16,10 @@ try:
     CUPY_DISPONIBLE = True
 except Exception:
     CUPY_DISPONIBLE = False
+
+# Decidir si mantener los archivos temporales de formato json, txt y csv (npz son archivos comprimidos y no tiene
+# sentido mantenerlos)
+MANTENER_ARCHIVOS_TEMPORALES = False
 
 # Neurona para pruebas básicas
 N = Neurona.predefinida("rs")
@@ -33,6 +38,16 @@ def simulador():
     sim = Simulador()
     sim.cargar_red(RED.copy())
     return sim
+
+# Eliminar la carpeta temporal si no se quieren mantener los archivos temporales
+@pytest.fixture(scope="session", autouse=True)
+def limpiar_temporales():
+    yield
+
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        carpeta = Path("./tests/tmp")
+        if carpeta.exists():
+            shutil.rmtree(carpeta)
 
 
 # ==================================================
@@ -208,7 +223,7 @@ def test_simular_varias_llamadas_continua_historial(simulador):
     assert np.array_equal(hist1["I"], hist2["I"][:6])
 
 def test_simular_guarda_resultados(simulador):
-    nombre_archivo = "./tests/tmp/historial.npz"
+    nombre_archivo = "./tests/tmp/historial_desde_simular.npz"
     simulador.simular(5, guardar_resultados=True, path_guardado=nombre_archivo)
     archivo = Path(nombre_archivo)
     assert archivo.exists()
@@ -309,10 +324,16 @@ def test_historial_devuelve_copia(simulador):
     hist["v"][0,0] = 0
     hist["u"][0,0] = 0
     hist["I"][0,0] = 10
+    hist["nombre"][0] = "Prueba"
+    hist["es_excitatoria"][0] = False
+    hist["dt"] = 1
     assert not simulador.historial["spikes"][0,0]
     assert simulador.historial["v"][0,0] != 0
     assert simulador.historial["u"][0,0] != 0
     assert simulador.historial["I"][0,0] != 10
+    assert simulador.historial["nombre"][0] != "Prueba"
+    assert simulador.historial["es_excitatoria"][0] is True
+    assert simulador.historial["dt"] == 0.5
 
 def test_historial_dtype_distinto_de_red_dtype():
     red = RedDeNeuronas({"rs": 1}, precision=64)
@@ -333,7 +354,7 @@ def test_historial_dtype_distinto_de_red_dtype():
 def test_guardar_historial_npz_red_con_1_neurona(simulador):
     simulador.simular(5)
 
-    nombre_archivo = "./tests/tmp/historial.npz"
+    nombre_archivo = "./tests/tmp/historial_1_neurona.npz"
     simulador.guardar_historial(nombre_archivo)
 
     archivo = Path(nombre_archivo)
@@ -358,7 +379,8 @@ def test_guardar_historial_npz_red_con_1_neurona(simulador):
     assert datos["dt"] == 0.5
 
     datos.close()
-    archivo.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo.unlink()
 
 def test_guardar_historial_npz_red_con_2_neuronas():
     red = RedDeNeuronas({"rs": 2})
@@ -366,7 +388,7 @@ def test_guardar_historial_npz_red_con_2_neuronas():
     sim.cargar_red(red)
     sim.simular(5)
 
-    nombre_archivo = "./tests/tmp/historial.npz"
+    nombre_archivo = "./tests/tmp/historial_2_neuronas.npz"
     sim.guardar_historial(nombre_archivo)
 
     archivo = Path(nombre_archivo)
@@ -391,7 +413,8 @@ def test_guardar_historial_npz_red_con_2_neuronas():
     assert datos["dt"] == 0.5
 
     datos.close()
-    archivo.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo.unlink()
 
 def test_guardar_historial_json():
     red = RedDeNeuronas({"rs": 2})
@@ -399,7 +422,7 @@ def test_guardar_historial_json():
     sim.cargar_red(red)
     sim.simular(5)
 
-    nombre_archivo = "./tests/tmp/historial.json"
+    nombre_archivo = "./tests/tmp/historiales.json"
     sim.guardar_historial(nombre_archivo)
 
     archivo = Path(nombre_archivo)
@@ -428,7 +451,8 @@ def test_guardar_historial_json():
     assert len(datos["es_excitatoria"]) == 2
     assert datos["dt"] == 0.5
 
-    archivo.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo.unlink()
 
 def test_guardar_historial_csv(simulador):
     simulador.simular(5)
@@ -459,13 +483,14 @@ def test_guardar_historial_csv(simulador):
     assert archivo_I.exists()
     assert archivo_dt.exists()
 
-    archivo_spikes.unlink()
-    archivo_v.unlink()
-    archivo_u.unlink()
-    archivo_nombres.unlink()
-    archivo_excitatorias.unlink()
-    archivo_I.unlink()
-    archivo_dt.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo_spikes.unlink()
+        archivo_v.unlink()
+        archivo_u.unlink()
+        archivo_nombres.unlink()
+        archivo_excitatorias.unlink()
+        archivo_I.unlink()
+        archivo_dt.unlink()
 
 def test_guardar_historial_txt(simulador):
     simulador.simular(5)
@@ -496,41 +521,45 @@ def test_guardar_historial_txt(simulador):
     assert archivo_I.exists()
     assert archivo_dt.exists()
 
-    archivo_spikes.unlink()
-    archivo_v.unlink()
-    archivo_u.unlink()
-    archivo_nombres.unlink()
-    archivo_excitatorias.unlink()
-    archivo_I.unlink()
-    archivo_dt.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo_spikes.unlink()
+        archivo_v.unlink()
+        archivo_u.unlink()
+        archivo_nombres.unlink()
+        archivo_excitatorias.unlink()
+        archivo_I.unlink()
+        archivo_dt.unlink()
 
 def test_guardar_historial_sin_historial(simulador):
-    nombre_archivo = "./tests/tmp/historial.npz"
+    nombre_archivo = "./tests/tmp/historial_inexistente.npz"
     simulador.guardar_historial(nombre_archivo)
     assert not Path(nombre_archivo).exists()
 
 def test_guardar_historial_formato_pasado(simulador):
     simulador.simular(5)
-    nombre_archivo = "./tests/tmp/historial"
+    nombre_archivo = "./tests/tmp/historial_sin_extension"
     simulador.guardar_historial(nombre_archivo, formato="json")
     archivo = Path(f"{nombre_archivo}.json")
     assert archivo.exists()
-    archivo.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo.unlink()
 
 def test_guardar_historial_sin_formato(simulador):
     simulador.simular(5)
-    nombre_archivo = "./tests/tmp/historial"
+    nombre_archivo = "./tests/tmp/historial_sin_formato"
     simulador.guardar_historial(nombre_archivo)
     archivo = Path(f"{nombre_archivo}.npz")
     assert archivo.exists()
-    archivo.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo.unlink()
 
 def test_guardar_historial_formatos_en_conflicto(simulador):
     simulador.simular(5)
-    simulador.guardar_historial("./tests/tmp/historial.npz", formato="json")
-    archivo = Path("./tests/tmp/historial.json")
+    simulador.guardar_historial("./tests/tmp/historial_conflicto.npz", formato="json")
+    archivo = Path("./tests/tmp/historial_conflicto.json")
     assert archivo.exists()
-    archivo.unlink()
+    if not MANTENER_ARCHIVOS_TEMPORALES:
+        archivo.unlink()
 
 
 # ==================================================
