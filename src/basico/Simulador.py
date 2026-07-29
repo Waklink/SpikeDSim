@@ -41,6 +41,9 @@ class Simulador:
     rendimiento : dict[str, float | None]
         Valores de rendimiento de la última simulación ejecutada.
 
+    configuracion : dict[str, bool | str | int]
+        Configuración por defecto de parámetros de la simulación.
+
     Notes
     -----
     Internamente se almacenan buffers separados para spikes, v y u en memoria CPU para evitar saturación
@@ -51,14 +54,39 @@ class Simulador:
     del dtype interno utilizado por la red.
     """
 
-    def __init__(self, paso_temporal: float = 0.5):
+    def __init__(self, paso_temporal: float = 0.5, guardar_resultados: bool = False,
+                 path_guardado: str = "./historial.npz", mostrar_progreso: bool = False,
+                 medir_rendimiento: bool = False, intervalo_rendimiento: int = 100,
+                 tamano_batch: int = 100):
         """
-        Inicializa un simulador con el paso temporal indicado.
+        Inicializa una instancia de Simulador con el paso temporal indicado.
 
         Parameters
         ----------
         paso_temporal : float
             Paso temporal de integración expresado en milisegundos.
+
+        guardar_resultados : bool, optional
+            Decidir si guardar los resultados automáticamente al final de la simulación o no.
+
+        path_guardado : str, optional
+            El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
+
+        mostrar_progreso : bool, optional
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
+            reduce el rendimiento de la simulación.
+
+        medir_rendimiento : bool, optional
+            Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
+            según el intervalo de medición del rendimiento.
+
+        intervalo_rendimiento : int, optional
+            Decidir cada cuántos pasos se mide el rendimiento, a menor intervalo, más se reduce el
+            rendimiento de la simulación.
+
+        tamano_batch : int, optional
+            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend cupy.
         
         Raises
         ------
@@ -77,6 +105,16 @@ class Simulador:
 
         self.__dt = paso_temporal
         self.__red = None
+
+        # Valores por defecto de parámetros de las simulaciones
+        self.__guardar_resultados = None
+        self.__path_guardado = None
+        self.__mostrar_progreso = None
+        self.__medir_rendimiento = None
+        self.__intervalo_rendimiento = None
+        self.__tamano_batch = None
+        self.configurar_simulacion(guardar_resultados, path_guardado, mostrar_progreso,
+                                   medir_rendimiento, intervalo_rendimiento, tamano_batch)
 
         # Historiales en RAM (NumPy) para evitar saturar la VRAM de la GPU
         self.__historial_spikes = None
@@ -160,29 +198,97 @@ class Simulador:
         self.__num_neuronas = 1
 
 
-    def _validar_parametros_simulacion(self, pasos: int, mostrar_progreso: bool, medir_rendimiento: bool,
+    def configurar_simulacion(self, guardar_resultados: bool | None = None, path_guardado: str | None = None,
+                              mostrar_progreso: bool | None = None, medir_rendimiento: bool | None = None,
+                              intervalo_rendimiento: int | None = None, tamano_batch: int | None = None) -> None:
+        """
+        Configurar el comportamiento por defecto de simular.
+
+        Parameters
+        ----------
+        guardar_resultados : bool | None, optional
+            Decidir si guardar los resultados automáticamente al final de la simulación o no.
+
+        path_guardado : str | None, optional
+            El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
+
+        mostrar_progreso : bool | None, optional
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
+            reduce el rendimiento de la simulación.
+
+        medir_rendimiento : bool | None, optional
+            Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
+            según el intervalo de medición del rendimiento.
+
+        intervalo_rendimiento : int | None, optional
+            Decidir cada cuántos pasos se mide el rendimiento, a menor intervalo, más se reduce el
+            rendimiento de la simulación.
+
+        tamano_batch : int | None, optional
+            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend cupy.
+        """
+        config = {
+            "guardar_resultados": self.__guardar_resultados,
+            "path_guardado": self.__path_guardado,
+            "mostrar_progreso": self.__mostrar_progreso,
+            "medir_rendimiento": self.__medir_rendimiento,
+            "intervalo_rendimiento": self.__intervalo_rendimiento,
+            "tamano_batch": self.__tamano_batch
+        }
+
+        if guardar_resultados is not None:
+            config["guardar_resultados"] = guardar_resultados
+        if path_guardado is not None:
+            config["path_guardado"] = path_guardado
+        if mostrar_progreso is not None:
+            config["mostrar_progreso"] = mostrar_progreso
+        if medir_rendimiento is not None:
+            config["medir_rendimiento"] = medir_rendimiento
+        if intervalo_rendimiento is not None:
+            config["intervalo_rendimiento"] = intervalo_rendimiento
+        if tamano_batch is not None:
+            config["tamano_batch"] = tamano_batch
+
+        self._validar_parametros_simulacion(**config)
+
+        self.__guardar_resultados = config["guardar_resultados"]
+        self.__path_guardado = config["path_guardado"]
+        self.__mostrar_progreso = config["mostrar_progreso"]
+        self.__medir_rendimiento = config["medir_rendimiento"]
+        self.__intervalo_rendimiento = config["intervalo_rendimiento"]
+        self.__tamano_batch = config["tamano_batch"]
+
+
+    def _validar_parametros_simulacion(self, guardar_resultados: bool, path_guardado : bool,
+                                       mostrar_progreso: bool, medir_rendimiento: bool,
                                        intervalo_rendimiento: int, tamano_batch: int) -> None:
         """
         Comprobar que los parámetros de la simulación sean correctos.
 
         Parameters
         ----------
-        pasos : int
-            Los pasos a simular.
+        guardar_resultados : bool
+            Decidir si guardar los resultados automáticamente al final de la simulación o no.
+
+        path_guardado : str
+            El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
 
         mostrar_progreso : bool
-            Decisión de si mostrar la barra de progreso al simular.
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
+            reduce el rendimiento de la simulación.
 
         medir_rendimiento : bool
-            Decisión de si medir los valores de rendimiento al simular.
+            Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
+            según el intervalo de medición del rendimiento.
 
         intervalo_rendimiento : int
-            Intervalo de pasos entre cada medición de rendimiento, si medir_rendimiento es False,
-            no se tendrá en cuenta.
-        
+            Decidir cada cuántos pasos se mide el rendimiento, a menor intervalo, más se reduce el
+            rendimiento de la simulación.
+
         tamano_batch : int
-            Número de pasos que se guardan temporalmente en la GPU antes de transferir al historial
-            de la CPU.
+            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend cupy.
         
         Raises
         ------
@@ -190,38 +296,32 @@ class Simulador:
             Si alguno de los parámetros no es del tipo de dato correcto.
         
         ValueError
-            Si algún parámetro no tiene un valor correcto. Tiene que haber una red o neurona cargada,
-            los pasos tienen que ser positivos, y el intervalo de medir rendimiento y tamaño de batches
-            GPU tienen que ser mayores que 0.
+            Si el intervalo de medir rendimiento o el tamaño de batches en gpu tienen es menor o igual que 0.
         """
-        if self.__red is None:
-            raise ValueError("No hay ninguna red o neurona cargada para simular.")
-        
-        if not isinstance(pasos, int):
-            raise TypeError("Los pasos deben ser un entero.")
-        
-        if pasos < 0:
-            raise ValueError("Los pasos a simular deben ser un entero positivo.")
-        
+        if not isinstance(guardar_resultados, bool):
+            raise TypeError("guardar_resultados debe ser un booleano.")
+
+        if not isinstance(path_guardado, str):
+            raise TypeError("path_guardado debe ser una cadena de texto con el path por defecto donde"
+                            " guardar los resultados ")
+
         if not isinstance(mostrar_progreso, bool):
             raise TypeError("mostrar_progreso debe ser un booleano.")
         
         if not isinstance(medir_rendimiento, bool):
             raise TypeError("medir_rendimiento debe ser un booleano.")
 
-        if medir_rendimiento:
-            if not isinstance(intervalo_rendimiento, int):
-                raise TypeError("El intervalo de recogida de valores de rendimiento debe ser un entero.")
-            
-            if intervalo_rendimiento <= 0:
-                raise ValueError("El intervalo de recogida de valores de rendimientos debe ser positivo.")
+        if not isinstance(intervalo_rendimiento, int):
+            raise TypeError("El intervalo de recogida de valores de rendimiento debe ser un entero.")
+        
+        if intervalo_rendimiento <= 0:
+            raise ValueError("El intervalo de recogida de valores de rendimientos debe ser positivo.")
 
-        if self.__red.uso_gpu:
-            if not isinstance(tamano_batch, int):
-                raise TypeError("El tamaño del batch de gpu debe ser un entero.")
-            
-            if tamano_batch <= 0:
-                raise ValueError("El tamaño del batch debe ser un entero positivo.")
+        if not isinstance(tamano_batch, int):
+            raise TypeError("El tamaño del batch de gpu debe ser un entero.")
+        
+        if tamano_batch <= 0:
+            raise ValueError("El tamaño del batch debe ser un entero positivo.")
 
 
     def _actualizar_rendimiento(self, barra: tqdm | None, process: psutil.Process,
@@ -345,9 +445,10 @@ class Simulador:
         return vector_I
 
 
-    def simular(self, pasos: int = 1000, I: float | list[float] | Array = 0 , guardar_resultados: bool = False,
-                path_guardado: str | None = None, mostrar_progreso: bool = False, medir_rendimiento: bool = False,
-                intervalo_rendimiento: int = 100, tamano_batch: int = 100) -> float:
+    def simular(self, pasos: int, I: float | list[float] | Array = 0,
+                guardar_resultados: bool | None = None, path_guardado: str | None = None,
+                mostrar_progreso: bool | None = None, medir_rendimiento: bool | None = None,
+                intervalo_rendimiento: int | None = None, tamano_batch: int | None = None) -> float:
         """
         Realizar un cierto número de pasos de simulación. Pudiendo decidir si guardar los historiales
         al finalizar, así como si mostrar el progreso de forma dinámica o si medir el rendimiento.
@@ -355,38 +456,39 @@ class Simulador:
 
         Parameters
         ----------
-        pasos : int, optional
+        pasos : int
             Número de pasos a simular. En el caso de ser 0, si no hay nada guardado en el historial,
             se guardará el estado actual como estado inicial, si ya hay estados guardados en el historial,
             no se guardará nada. Por defecto se simularán 1000 pasos.
 
-        I : float | list[float] | Array
-            Corriente de entrada para las neuronas.
+        I : float | list[float] | Array, otpional
+            Corriente de entrada para las neuronas. Por defecto, no se aplica corriente a las neuronas.
 
-        guardar_resultados : bool
-            Decisión de si guardar los historiales al terminar la simulación o no.
+        Los siguientes parámetros son para configuraciones personalizadas, no modifican los valores
+        por defecto, si se quiere cambiar el valor por defecto de alguno de ellos, se puede usar
+        configurar_simulacion:
+
+        guardar_resultados : bool | None, optional
+            Decidir si guardar los resultados automáticamente al final de la simulación o no.
 
         path_guardado : str | None, optional
-            Path al archivo donde guardar los resultados en el caso de que guardar_resultados sea
-            True. Si no se especifica, entonces se usará "./historial.npz", el valor por defecto de
-            la función guardar_historial().
+            El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
 
-        mostrar_progreso : bool
-            Determinar si mostrar el progreso de la simulación de forma dinámica como una barra de
-            progreso. Esto reduce el rendimiento de la simulación. Por defecto es False.
-        
-        medir_rendimiento : bool
-            Determinar si medir el rendimiento de la simulación actual, esto reduce el rendimiento
-            de la simulación, por lo que no es completamente indicativo del rendimiento máximo real.
-            Por defecto es False.
-        
-        intervalo_rendimiento : int
-            Número de pasos intermedios entre recogidas de valores de rendimiento, solo se recogen
-            datos cuando medir_rendimiento=True. Por defecto es 100.
+        mostrar_progreso : bool | None, optional
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
+            reduce el rendimiento de la simulación.
 
-        tamano_batch : int, optional
-            Número de pasos temporales que se almacenan en GPU antes de transferirlos conjuntamente
-            a la memoria RAM. Solo se aplica cuando el backend usado es CuPy. Por defecto es 100.
+        medir_rendimiento : bool | None, optional
+            Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
+            según el intervalo de medición del rendimiento.
+
+        intervalo_rendimiento : int | None, optional
+            Decidir cada cuántos pasos se mide el rendimiento, a menor intervalo, más se reduce el
+            rendimiento de la simulación.
+
+        tamano_batch : int | None, optional
+            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend cupy.
         
         Returns
         -------
@@ -403,9 +505,32 @@ class Simulador:
             Si no hay nada cargado, o si los pasos a simular son negativos.
         """
 
+        if guardar_resultados is None:
+            guardar_resultados = self.__guardar_resultados
+        if path_guardado is None:
+            path_guardado = self.__path_guardado
+        if mostrar_progreso is None:
+            mostrar_progreso = self.__mostrar_progreso
+        if medir_rendimiento is None:
+            medir_rendimiento = self.__medir_rendimiento
+        if intervalo_rendimiento is None:
+            intervalo_rendimiento = self.__intervalo_rendimiento
+        if tamano_batch is None:
+            tamano_batch = self.__tamano_batch
+
         # Comprobaciones iniciales de tipos y valores de los parámetros
-        self._validar_parametros_simulacion(pasos, mostrar_progreso, medir_rendimiento, intervalo_rendimiento,
-                                            tamano_batch)
+        self._validar_parametros_simulacion(guardar_resultados, path_guardado, mostrar_progreso,
+                                            medir_rendimiento, intervalo_rendimiento, tamano_batch)
+
+        if self.__red is None:
+            raise ValueError("No hay ninguna red o neurona cargada para simular.")
+        
+        if not isinstance(pasos, int):
+            raise TypeError("Los pasos deben ser un entero.")
+        
+        if pasos < 0:
+            raise ValueError("Los pasos a simular deben ser un entero positivo.")
+
         
         # Reiniciar las métricas de rendimiento
         self.limpiar_rendimiento()
@@ -723,12 +848,18 @@ class Simulador:
         """
         if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
             return None
+
+        # Si es una sola neurona (columna única), aplanamos a 1D (Pasos,) para mayor comodidad
+        spikes = self.__historial_spikes[:, 0] if self.__num_neuronas == 1 else self.__historial_spikes
+        v = self.__historial_v[:, 0] if self.__num_neuronas == 1 else self.__historial_v
+        u = self.__historial_u[:, 0] if self.__num_neuronas == 1 else self.__historial_u
+        I = self.__historial_I[:, 0] if self.__num_neuronas == 1 else self.__historial_I
         
         return {
-            "spikes": self.__historial_spikes.copy(),
-            "v": self.__historial_v.copy(),
-            "u": self.__historial_u.copy(),
-            "I": self.__historial_I.copy(),
+            "spikes": spikes.copy(),
+            "v": v.copy(),
+            "u": u.copy(),
+            "I": I.copy(),
             # Si la red es una neurona, convertimos nombre y es_excitatoria a listas para mantener
             # el formato de los datos consistente
             "nombre": [self.__red.nombre] if isinstance(self.__red, Neurona) else self.__red.nombre,
@@ -737,7 +868,7 @@ class Simulador:
         }
 
 
-    def guardar_historial(self, path: str = "./historial.npz",
+    def guardar_historial(self, path: str | None = None,
                           formato: Literal["npz", "txt", "json", "csv"] | None = None) -> None:
         """
         Guardar el historial en uno o varios archivos, pudiendo elegir el formato entre varios posibles.
@@ -750,10 +881,10 @@ class Simulador:
 
         Parameters
         ----------
-        path : str
+        path : str | None, optional
             La ruta, absoluta o relativa, al archivo en el que se va a guardar el historial. Debe
             incluir el nombre del archivo y, en el caso de no proporcionar un formato, la extensión
-            elegida para guardar los resultados. Por defecto es "./historial.npz"
+            elegida para guardar los resultados. Por defecto se usa el último valor configurado.
 
             Si se proporciona un formato distinto de la extensión actual del path, la 
             extensión original se eliminará y se sustituirá por la correspondiente al formato elegido.
@@ -782,8 +913,11 @@ class Simulador:
             print("No hay datos en el historial para guardar.")
             return
         
-        # 1. Procesar la extensión del archivo y formato
-        formatos_soportados = ["npz", "txt", "json", "csv"]
+        # Procesar la extensión del archivo y formato
+        formatos_soportados = ["npz", "json", "csv", "txt"]
+
+        if path is None:
+            path = self.__path_guardado
 
         filepath = Path(path)
         if formato is None or formato not in formatos_soportados:
@@ -797,22 +931,22 @@ class Simulador:
         # Asegurar el directorio de salida
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        # 2. Si es una sola neurona (columna única), aplanamos a 1D (Pasos,) para mayor comodidad
-        spikes_data = historial["spikes"][:, 0] if self.__num_neuronas == 1 else historial["spikes"]
-        v_data = historial["v"][:, 0] if self.__num_neuronas == 1 else historial["v"]
-        u_data = historial["u"][:, 0] if self.__num_neuronas == 1 else historial["u"]
-        I_data = historial["I"][:, 0] if self.__num_neuronas == 1 else historial["I"]
+        # Cargar los historiales
+        spikes_data = historial["spikes"]
+        v_data = historial["v"]
+        u_data = historial["u"]
+        I_data = historial["I"]
 
         # Cargar los metadatos
         nombres = historial["nombre"]
         excitatorias = historial["es_excitatoria"]
         paso_temporal = historial["dt"]
 
-        # 3. Exportar según el formato
+        # Exportar según el formato
         if formato == "npz":
             np.savez_compressed(filepath, spikes=spikes_data, v=v_data, u=u_data, I=I_data, nombre=nombres,
                                 es_excitatoria=excitatorias, dt=paso_temporal)
-            print(f"Historial guardado exitosamente en: {filepath}")
+            print(f"Historiales guardados exitosamente en: {filepath}")
 
         elif formato == "json":
             import json
@@ -821,47 +955,43 @@ class Simulador:
                                "dt": paso_temporal}
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(estructura_json, f, indent=2)
-            print(f"Historial guardado exitosamente en: {filepath}")
+            print(f"Historiales guardados exitosamente en: {filepath}")
 
         elif formato == "csv":
-            # Guardar en tres archivos tabulares independientes (Filas: Pasos, Columnas: Neuronas)
-            path_spikes = filepath.with_name(f"{filepath.stem}_spikes.csv")
-            path_v = filepath.with_name(f"{filepath.stem}_v.csv")
-            path_u = filepath.with_name(f"{filepath.stem}_u.csv")
-            # Guardar archivos con los metadatos: nombre, es_excitatoria, I y dt
-            path_nombre = filepath.with_name(f"{filepath.stem}_nombres.csv")
-            path_excitatorias = filepath.with_name(f"{filepath.stem}_excitatorias.csv")
-            path_I = filepath.with_name(f"{filepath.stem}_I.csv")
+            historiales = ("spikes", "v", "u", "I")
+            data = (spikes_data, v_data, u_data, I_data)
+            # Guardar en cuatro archivos tabulares independientes (Filas: Pasos, Columnas: Neuronas)
+            print("Historiales guardados exitosamente en:")
+            for historial, datos in zip(historiales, data):
+                path_historial = filepath.with_name(f"{filepath.stem}_{historial}.csv")
+                np.savetxt(path_historial, datos, delimiter=",")
+                print(f"  - {path_historial}")
+            # Guardar archivos con los metadatos: nombre, es_excitatoria y dt
+            path_nombre = filepath.with_name(f"{filepath.stem}_nombre.csv")
+            path_excitatorias = filepath.with_name(f"{filepath.stem}_es_excitatoria.csv")
             path_dt = filepath.with_name(f"{filepath.stem}_dt.csv")
-            np.savetxt(path_spikes, spikes_data, delimiter=",")
-            np.savetxt(path_v, v_data, delimiter=",")
-            np.savetxt(path_u, u_data, delimiter=",")
-            np.savetxt(path_I, I_data, delimiter=",")
             np.savetxt(path_nombre, nombres, fmt="%s", delimiter=",")
-            np.savetxt(path_excitatorias, excitatorias, fmt="%s", delimiter=",")
+            np.savetxt(path_excitatorias, excitatorias, fmt="%u", delimiter=",")
             np.savetxt(path_dt, [paso_temporal], delimiter=",")
-            print(f"Historial guardado en archivos CSV:\n  - {path_spikes}\n  - {path_v}\n  - {path_u}")
-            print(f"Con metadatos en:\n  - {path_nombre}\n  - {path_excitatorias}\n  - {path_I}\n  - {path_dt}")
+            print(f"Con metadatos en:\n  - {path_nombre}\n  - {path_excitatorias}\n  - {path_dt}")
 
         elif formato == "txt":
-            # Texto plano separado por espacios
-            path_spikes = filepath.with_name(f"{filepath.stem}_spikes.txt")
-            path_v = filepath.with_name(f"{filepath.stem}_v.txt")
-            path_u = filepath.with_name(f"{filepath.stem}_u.txt")
+            historiales = ("spikes", "v", "u", "I")
+            data = (spikes_data, v_data, u_data, I_data)
+            # Guardar en cuatro archivos tabulares independientes (Filas: Pasos, Columnas: Neuronas)
+            print("Historiales guardados exitosamente en:")
+            for historial, datos in zip(historiales, data):
+                path_historial = filepath.with_name(f"{filepath.stem}_{historial}.txt")
+                np.savetxt(path_historial, datos)
+                print(f"  - {path_historial}")
             # Guardar archivos con los metadatos: nombre, es_excitatoria y dt
-            path_nombre = filepath.with_name(f"{filepath.stem}_nombres.txt")
-            path_excitatorias = filepath.with_name(f"{filepath.stem}_excitatorias.txt")
-            path_I = filepath.with_name(f"{filepath.stem}_I.txt")
+            path_nombre = filepath.with_name(f"{filepath.stem}_nombre.txt")
+            path_excitatorias = filepath.with_name(f"{filepath.stem}_es_excitatoria.txt")
             path_dt = filepath.with_name(f"{filepath.stem}_dt.txt")
-            np.savetxt(path_spikes, spikes_data)
-            np.savetxt(path_v, v_data)
-            np.savetxt(path_u, u_data)
-            np.savetxt(path_I, I_data)
-            np.savetxt(path_nombre, nombres, fmt="%s", delimiter="\n")
-            np.savetxt(path_excitatorias, excitatorias, fmt="%s", delimiter="\n")
+            np.savetxt(path_nombre, nombres, fmt="%s", delimiter="\t")
+            np.savetxt(path_excitatorias, excitatorias, fmt="%u", delimiter="\t")
             np.savetxt(path_dt, [paso_temporal])
-            print(f"Historial guardado en archivos de texto:\n - {path_spikes}\n - {path_v}\n - {path_u}")
-            print(f"Con metadatos en:\n  - {path_nombre}\n  - {path_excitatorias}\n  - {path_I}\n  - {path_dt}")
+            print(f"Con metadatos en:\n  - {path_nombre}\n  - {path_excitatorias}\n  - {path_dt}")
 
 
     @property
@@ -955,4 +1085,23 @@ class Simulador:
             "gpu_maxima": self.__gpu_maxima,
             "vram_media": self.__vram_media,
             "vram_maxima": self.__vram_maxima
+        }
+
+    @property
+    def configuracion(self) -> dict[str, bool | str | int]:
+        """
+        Configuración actual de los valores por defecto de parámetros de la simulación.
+
+        Returns
+        -------
+        dict[str, bool | str | int]
+            Diccionario con los valores de la configuración por defecto.
+        """
+        return {
+            "guardar_resultados": self.__guardar_resultados,
+            "path_guardado": self.__path_guardado,
+            "mostrar_progreso": self.__mostrar_progreso,
+            "medir_rendimiento": self.__medir_rendimiento,
+            "intervalo_rendimiento": self.__intervalo_rendimiento,
+            "tamano_batch": self.__tamano_batch
         }
