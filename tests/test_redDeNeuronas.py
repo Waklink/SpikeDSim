@@ -12,8 +12,8 @@ except ImportError:
     cp = None
     CUPY_DISPONIBLE = False
 
-from src.basico.Neurona import Neurona
-from src.basico.RedDeNeuronas import RedDeNeuronas
+from src.Neurona import Neurona
+from src.RedDeNeuronas import RedDeNeuronas
 
 # Comprobar si hay cupy disponible
 try:

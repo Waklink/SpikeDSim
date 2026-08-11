@@ -16,9 +16,9 @@ from pathlib import Path
 import shutil
 import json
 
-from src.basico.Neurona import Neurona
-from src.basico.RedDeNeuronas import RedDeNeuronas
-from src.basico.Simulador import Simulador
+from src.Neurona import Neurona
+from src.RedDeNeuronas import RedDeNeuronas
+from src.Simulador import Simulador
 
 # Comprobar si hay cupy disponible
 try:

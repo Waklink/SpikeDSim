@@ -1,5 +1,5 @@
 import pytest
-from src.basico.Neurona import Neurona
+from src.Neurona import Neurona
 
 # Parámetros básicos a usar en las pruebas al crear neuronas personalizadas.
 # Siguen el formato (a, b, c, d)
