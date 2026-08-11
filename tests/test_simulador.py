@@ -1,6 +1,16 @@
 import pytest
 import numpy as np
-import cupy as cp
+
+try:
+    import cupy as cp
+    try:
+        cp.zeros(1)
+        CUPY_DISPONIBLE = True
+    except Exception:
+        CUPY_DISPONIBLE = False
+except ImportError:
+    cp = None
+    CUPY_DISPONIBLE = False
 
 from pathlib import Path
 import shutil
@@ -92,7 +102,7 @@ def test_crear_con_configuracion_por_defecto():
     assert config["intervalo_rendimiento"] == 100
     assert config["tamano_batch"] == 100
 
-def test_crear_Con_configuracion_personalizada():
+def test_crear_con_configuracion_personalizada():
     sim = Simulador(mostrar_progreso=True, medir_rendimiento=True, intervalo_rendimiento=1, tamano_batch=10)
     config = sim.configuracion
     assert config["guardar_resultados"] is False
@@ -145,7 +155,7 @@ def test_configurar_simulacion_enteros_invalidos(parametro, valor):
 
 @pytest.mark.parametrize("parametro", ["intervalo_rendimiento", "tamano_batch"])
 @pytest.mark.parametrize("valor", [0, -1])
-def test_configurar_simulacion_enteros_np_positivos(parametro, valor):
+def test_configurar_simulacion_enteros_no_positivos(parametro, valor):
     sim = Simulador()
     with pytest.raises(ValueError):
         sim.configurar_simulacion(**{parametro: valor})
@@ -174,6 +184,12 @@ def test_cargar_red_con_neurona_cargada():
     sim.cargar_neurona(neurona)
     with pytest.raises(ValueError):
         sim.cargar_red(red)
+
+def test_cargar_red_despues_de_limpiar_todo(simulador):
+    simulador.simular(5)
+    simulador.limpiar_todo()
+    simulador.cargar_red(RED.copy())
+    assert simulador.red is not None
 
 @pytest.mark.parametrize("red", ["red", [RED.copy()], N.copy()])
 def test_cargar_red_invalido(red):
@@ -251,7 +267,6 @@ def test_simular_cero_pasos_guarda_estado_inicial():
 
     assert tiempo == pytest.approx(0, abs=1.0e-5)
     assert sim.paso_actual == 1
-    assert sim.historial is not None
     assert sim.historial["spikes"].shape == (1,)
     assert sim.historial["v"].shape == (1,)
     assert sim.historial["u"].shape == (1,)
@@ -260,6 +275,16 @@ def test_simular_cero_pasos_guarda_estado_inicial():
     assert sim.historial["v"][0] == pytest.approx(red.estado["v"][0])
     assert sim.historial["u"][0] == pytest.approx(red.estado["u"][0])
     assert sim.historial["I"][0] == pytest.approx(0)
+
+def test_simular_cero_pasos_y_continuar(simulador):
+    simulador.simular(0)
+    assert simulador.paso_actual == 1
+    simulador.simular(5)
+    assert simulador.paso_actual == 6
+    assert simulador.historial["v"].shape == (6,)
+    assert simulador.historial["u"].shape == (6,)
+    assert simulador.historial["I"].shape == (6,)
+    assert simulador.historial["spikes"].shape == (6,)
 
 def test_simular_avanza_pasos_correctamente(simulador):
     simulador.simular(pasos=10)
@@ -271,25 +296,26 @@ def test_simular_avanza_pasos_correctamente(simulador):
     assert hist["u"].shape == (11,)
     assert hist["I"].shape == (11,)
 
-def test_simular_varias_llamadas_continua_historial(simulador):
-    simulador.simular(5)
+def test_simular_varias_llamadas_continua_historial(simulador2):
+    simulador2.simular(5, I=[5, 10])
+    hist1 = simulador2.historial
 
-    hist1 = simulador.historial
-    assert simulador.paso_actual == 6
+    simulador2.simular(5, I=[20, 30])
+    hist2 = simulador2.historial
 
-    simulador.simular(5)
-    assert simulador.paso_actual == 11
-
-    hist2 = simulador.historial
-    assert hist2["spikes"].shape == (11,)
-    assert hist2["v"].shape == (11,)
-    assert hist2["u"].shape == (11,)
-    assert hist2["I"].shape == (11,)
+    assert simulador2.paso_actual == 11
+    assert hist2["spikes"].shape == (11,2)
+    assert hist2["v"].shape == (11,2)
+    assert hist2["u"].shape == (11,2)
+    assert hist2["I"].shape == (11,2)
 
     assert np.array_equal(hist1["spikes"], hist2["spikes"][:6])
     assert np.array_equal(hist1["v"], hist2["v"][:6])
     assert np.array_equal(hist1["u"], hist2["u"][:6])
     assert np.array_equal(hist1["I"], hist2["I"][:6])
+    assert np.array_equal(hist2["I"][0], [0, 0])
+    assert np.all(hist2["I"][1:6] == [5, 10])
+    assert np.all(hist2["I"][6:] == [20, 30])
 
 def test_simular_neurona_individual():
     neurona = N.copy()
@@ -297,26 +323,41 @@ def test_simular_neurona_individual():
     sim.cargar_neurona(neurona)
     sim.simular(10)
     hist = sim.historial
-    assert hist is not None
+
     assert hist["spikes"].shape == (11,)
     assert hist["v"].shape == (11,)
     assert hist["u"].shape == (11,)
     assert len(hist["nombre"]) == 1
     assert len(hist["es_excitatoria"]) == 1
+    assert neurona.estado == (hist["v"][10], hist["u"][10])
 
 def test_simular_corriente_escalar(simulador2):
     simulador2.simular(5, I=10)
-    assert np.all(simulador2.historial["I"] == 10)
+    hist = simulador2.historial
+    assert np.all(hist["I"][0] == 0)
+    assert np.all(hist["I"][1:] == 10)
 
-def test_simular_crriente_vector(simulador2):
+def test_simular_corriente_vector(simulador2):
     simulador2.simular(5, I=[5, 10])
     hist = simulador2.historial
-    assert np.all(hist["I"][:,0] == 5)
-    assert np.all(hist["I"][:,1] == 10)
+    assert np.array_equal(hist["I"][0], [0, 0])
+    assert np.all(hist["I"][1:] == np.array([5, 10]))
+
+def test_simular_corriente_array(simulador2):
+    I = np.asarray([5, 10], dtype=np.float64)
+    simulador2.simular(5, I=I)
+    historial = simulador2.historial
+    assert np.array_equal(historial["I"][0], [0, 0])
+    assert np.all(historial["I"][1:] == [5, 10])
 
 def test_simular_corriente_tamano_incorrecto(simulador2):
     with pytest.raises(ValueError):
         simulador2.simular(5, I=[1,2,3])
+
+@pytest.mark.parametrize("I", ["10", {"a": 1}])
+def test_simular_corriente_tipo_invalido(simulador2, I):
+    with pytest.raises(TypeError):
+        simulador2.simular(5, I=I)
 
 def test_simular_guarda_resultados(simulador):
     nombre_archivo = "./tests/tmp_sim/historial_desde_simular.npz"
@@ -330,91 +371,20 @@ def test_simular_guardar_resultados_con_configuracion(simulador):
     simulador.simular(5)
     assert Path(path).exists()
 
+def test_simular_no_guarda_resultados_si_se_desactiva(simulador):
+    path = "./tests/tmp_sim/no_guardar.npz"
+    simulador.simular(5, guardar_resultados=False, path_guardado=path)
+    assert not Path(path).exists()
 
-# ==================================================
-# TESTS DE LIMPIAR
-# ==================================================
-
-def test_limpiar_historial(simulador):
-    simulador.simular(10)
-    simulador.limpiar_historial()
-    assert simulador.historial is None
-    assert simulador.paso_actual == 0
-
-def test_limpiar_rendimiento(simulador):
-    simulador.simular(10, medir_rendimiento=True, intervalo_rendimiento=1)
-    for clave, valor in simulador.rendimiento.items():
-        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
-            assert valor is not None
-        elif clave == "tiempo":
-            assert valor > 0
-        else:
-            assert valor is None
-
-    simulador.limpiar_rendimiento()
-    for clave, valor in simulador.rendimiento.items():
-        if clave != "tiempo":
-            assert valor is None
-        else:
-            assert valor == pytest.approx(0, abs=1.0e-6)
-
-def test_limpiar_todo(simulador):
-    simulador.simular(5, medir_rendimiento=True, intervalo_rendimiento=1)
-    for clave, valor in simulador.rendimiento.items():
-        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
-            assert valor is not None
-        elif clave == "tiempo":
-            assert valor > 0
-        else:
-            assert valor is None
-
-    simulador.limpiar_todo()
-    assert simulador.red is None
-    assert simulador.num_neuronas == 0
-    assert simulador.historial is None
-    assert simulador.paso_actual == 0
-    for clave, valor in simulador.rendimiento.items():
-        if clave != "tiempo":
-            assert valor is None
-        else:
-            assert valor == 0
+def test_simular_sobrescribe_configuracion(simulador):
+    path = "./tests/tmp_sim/sobrescribe_configuracion.npz"
+    simulador.configurar_simulacion(guardar_resultados=True, path_guardado=path)
+    simulador.simular(5, guardar_resultados=False, path_guardado=path)
+    assert not Path(path).exists()
 
 
 # ==================================================
-# TEST DE REINICIAR
-# ==================================================
-
-def test_reiniciar():
-    red = RedDeNeuronas({N: 1})
-    estado_inicial = red.estado
-
-    sim = Simulador()
-    sim.cargar_red(red)
-    sim.simular(5, medir_rendimiento=True, intervalo_rendimiento=1)
-    assert red.estado != estado_inicial
-    assert sim.historial is not None
-    assert sim.paso_actual == 6
-    for clave, valor in sim.rendimiento.items():
-        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
-            assert valor is not None
-        elif clave == "tiempo":
-            assert valor > 0
-        else:
-            assert valor is None
-
-    sim.reiniciar()
-    assert red.estado == estado_inicial
-    assert sim.historial is None
-    assert sim.paso_actual == 0
-    for clave, valor in sim.rendimiento.items():
-        if clave != "tiempo":
-            assert valor is None
-        else:
-            assert valor == pytest.approx(0, abs=1.0e-6)
-
-
-# ==================================================
-# TEST DE PROPIEDADES
+# TESTS DE PROPIEDADES
 # ==================================================
 
 def test_historial_devuelve_copia(simulador):
@@ -433,7 +403,7 @@ def test_historial_devuelve_copia(simulador):
     assert simulador.historial["u"][0] != 0
     assert simulador.historial["I"][0] != 10
     assert simulador.historial["nombre"][0] != "Prueba"
-    assert simulador.historial["es_excitatoria"][0] is True
+    assert bool(simulador.historial["es_excitatoria"][0])
     assert simulador.historial["dt"] == 0.5
 
 def test_historial_dtype_distinto_de_red_dtype():
@@ -494,14 +464,6 @@ def test_guardar_historial_npz_red_con_2_neuronas():
     assert archivo.exists()
 
     datos = np.load(nombre_archivo)
-
-    assert "spikes" in datos
-    assert "v" in datos
-    assert "u" in datos
-    assert "nombre" in datos
-    assert "es_excitatoria" in datos
-    assert "I" in datos
-    assert "dt" in datos
 
     assert datos["spikes"].shape == (6,2)
     assert datos["v"].shape == (6,2)
@@ -630,11 +592,12 @@ def test_guardar_historial_formatos_en_conflicto(simulador):
     archivo = Path("./tests/tmp_sim/historial_conflicto.json")
     assert archivo.exists()
 
-def test_guardar_historial_formato_inexistente(simulador):
+def test_guardar_historial_formato_invalido_usa_npz(simulador):
     simulador.simular(5)
     path = "./tests/tmp_sim/historial_sin_formato_existente"
     simulador.guardar_historial(path, formato="inexistente")
     assert Path(path + ".npz").exists()
+    assert not Path(path + ".inexistente").exists()
 
 def test_guardar_historial_en_path_por_defecto(simulador):
     simulador.simular(5)
@@ -642,6 +605,92 @@ def test_guardar_historial_en_path_por_defecto(simulador):
     simulador.configurar_simulacion(path_guardado=path)
     simulador.guardar_historial()
     assert Path(path).exists()
+
+
+# ==================================================
+# TESTS DE LIMPIAR
+# ==================================================
+
+def test_limpiar_historial(simulador):
+    simulador.simular(10)
+    simulador.limpiar_historial()
+    assert simulador.historial is None
+    assert simulador.paso_actual == 0
+    assert simulador.red is not None
+
+def test_limpiar_rendimiento(simulador):
+    simulador.simular(10, medir_rendimiento=True, intervalo_rendimiento=1)
+    for clave, valor in simulador.rendimiento.items():
+        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
+            assert valor is not None
+        elif clave == "tiempo":
+            assert valor > 0
+        else:
+            assert valor is None
+
+    simulador.limpiar_rendimiento()
+    assert simulador.historial is not None
+    assert simulador.red is not None
+    for clave, valor in simulador.rendimiento.items():
+        if clave != "tiempo":
+            assert valor is None
+        else:
+            assert valor == pytest.approx(0, abs=1.0e-6)
+
+def test_limpiar_todo(simulador):
+    simulador.simular(5, medir_rendimiento=True, intervalo_rendimiento=1)
+    for clave, valor in simulador.rendimiento.items():
+        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
+            assert valor is not None
+        elif clave == "tiempo":
+            assert valor > 0
+        else:
+            assert valor is None
+
+    simulador.limpiar_todo()
+    assert simulador.red is None
+    assert simulador.num_neuronas == 0
+    assert simulador.historial is None
+    assert simulador.paso_actual == 0
+    for clave, valor in simulador.rendimiento.items():
+        if clave != "tiempo":
+            assert valor is None
+        else:
+            assert valor == 0
+
+
+# ==================================================
+# TEST DE REINICIAR
+# ==================================================
+
+def test_reiniciar():
+    red = RedDeNeuronas({N: 1})
+    estado_inicial = red.estado
+
+    sim = Simulador()
+    sim.cargar_red(red)
+    sim.simular(5, medir_rendimiento=True, intervalo_rendimiento=1)
+    assert red.estado != estado_inicial
+    assert sim.historial is not None
+    assert sim.paso_actual == 6
+    for clave, valor in sim.rendimiento.items():
+        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
+            assert valor is not None
+        elif clave == "tiempo":
+            assert valor > 0
+        else:
+            assert valor is None
+
+    sim.reiniciar()
+    assert red.estado == estado_inicial
+    assert sim.historial is None
+    assert sim.paso_actual == 0
+    assert sim.red is not None
+    for clave, valor in sim.rendimiento.items():
+        if clave != "tiempo":
+            assert valor is None
+        else:
+            assert valor == pytest.approx(0, abs=1.0e-6)
 
 
 # ==================================================
@@ -699,12 +748,12 @@ def test_simular_en_gpu_batch_incompleto():
     red = RED.convertir_backend("cupy")
     sim = Simulador()
     sim.cargar_red(red)
-    sim.simular(5)
+    sim.simular(10)
     hist = sim.historial
-    assert hist["spikes"].shape == (6,)
-    assert hist["v"].shape == (6,)
-    assert hist["u"].shape == (6,)
-    assert hist["I"].shape == (6,)
+    assert hist["spikes"].shape == (11,)
+    assert hist["v"].shape == (11,)
+    assert hist["u"].shape == (11,)
+    assert hist["I"].shape == (11,)
     assert len(hist["nombre"]) == 1
     assert len(hist["es_excitatoria"]) == 1
     assert hist["dt"] == 0.5
@@ -714,12 +763,12 @@ def test_simular_en_gpu_batch_con_restante():
     red = RED.convertir_backend("cupy")
     sim = Simulador()
     sim.cargar_red(red)
-    sim.simular(5, tamano_batch=4)
+    sim.simular(10, tamano_batch=4)
     hist = sim.historial
-    assert hist["spikes"].shape == (6,)
-    assert hist["v"].shape == (6,)
-    assert hist["u"].shape == (6,)
-    assert hist["I"].shape == (6,)
+    assert hist["spikes"].shape == (11,)
+    assert hist["v"].shape == (11,)
+    assert hist["u"].shape == (11,)
+    assert hist["I"].shape == (11,)
     assert len(hist["nombre"]) == 1
     assert len(hist["es_excitatoria"]) == 1
     assert hist["dt"] == 0.5

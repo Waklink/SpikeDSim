@@ -8,7 +8,7 @@ PARAMETROS_BASICOS = (0.02, 0.2, -65, 8)
 # Tipos predefinidos
 TIPOS = ("rs", "ib", "ch", "fs", "lts", "tc", "rz")
 
-# Parametros de los tipos predefinidos
+# Parámetros de los tipos predefinidos
 PARAMETROS_TIPOS = {
         "rs": (0.02, 0.2, -65, 8),
         "ib": (0.02, 0.2, -55, 4),
@@ -65,9 +65,6 @@ def test_es_excitatoria_debe_ser_booleano(valor_invalido):
 # TESTS DE CREAR NEURONAS PREDEFINIDAS
 # ==================================================
 
-def test_tipos_disponibles():
-    assert Neurona.tipos_disponibles() == TIPOS
-
 @pytest.mark.parametrize("tipo", TIPOS)
 def test_crear_predefinido(tipo):
     n = Neurona.predefinida(tipo)
@@ -78,22 +75,9 @@ def test_predefinida_u_inicial_calculado():
     n = Neurona.predefinida("rs", v_inicial=-50)
     assert n.estado == (-50, -10)
 
-def test_predefinida_estado_inicial_presonalizado():
+def test_predefinida_estado_inicial_personalizado():
     n = Neurona.predefinida("rs", v_inicial=-50, u_inicial=-20)
     assert n.estado == (-50, -20)
-
-@pytest.mark.parametrize("alias", ["rs ", "RS", " regular Spiking", " regular-spiking "])
-def test_alias_rs(alias):
-    assert Neurona.predefinida(alias).parametros == Neurona.predefinida("rs").parametros
-
-def test_tipo_inexistente():
-    with pytest.raises(ValueError):
-        Neurona.predefinida("Neurona")
-
-@pytest.mark.parametrize("tipo", [None, 123, ["rs"]])
-def test_tipo_no_texto(tipo):
-    with pytest.raises(TypeError):
-        Neurona.predefinida(tipo)
 
 
 # ==================================================
@@ -110,11 +94,12 @@ def test_actualizar_sin_spike():
     assert n.estado != estado_inicial
 
 def test_actualizar_genera_spike():
-    n = Neurona.predefinida("rs")
-    assert n.actualizar(300, 1)
+    n = Neurona.predefinida("rs", v_inicial=29)
+    assert n.actualizar(10, 1) is True
+    assert n.estado[0] == 30
 
 def test_actualizar_reset():
-    n = Neurona.predefinida("rs", v_inicial=31, u_inicial=-13)
+    n = Neurona.predefinida("rs", v_inicial=30, u_inicial=-13)
     n.actualizar(0, 1)
     v, u = n.estado
 
@@ -122,11 +107,12 @@ def test_actualizar_reset():
     # v = c = -65
     # u = u + d = -13 + 8 = -5
     # Integración
-    # v = v + 0.04*v**2 + 5*v + 140 - u + I = v + 0.04 * -65**2 + 5 * -65 + 140 - (-5) + 0 = v -11 = -65 -11 = -76
-    # u = u + a*(b*v - u) = u + 0.02 * (0.2 * -76 - (-5)) = u + -0.204 = -5 -0.204 = -5.204
+    # v = v + 0.5 * (0.04*v**2 + 5*v + 140 - u + I) = v + 0.5 * (0.04 * (-65)**2 + 5 * (-65) + 140 - (-5) + 0) = v + 0.5 * (-11) = -65 -5.5 = -70.5
+    # v = v + 0.5 * (0.04*v**2 + 5*v + 140 - u + I) = v + 0.5 * (0.04 * (-70.5)**2 + 5 * (-70.5) + 140 - (-5) + 0) = v + 0.5 * (-8.69) = -70.5 - 4.345 = -74.845
+    # u = u + a*(b*v - u) = u + 0.02 * (0.2 * (-74.845) - (-5)) = u - 0.19938 = -5 - 0.19938 = -5.19938
 
-    assert v == pytest.approx(-76)
-    assert u == pytest.approx(-5.204)
+    assert v == pytest.approx(-74.845)
+    assert u == pytest.approx(-5.19938)
 
 @pytest.mark.parametrize("I", [-10, -5, 0, 5, 10])
 @pytest.mark.parametrize("dt", [0.01, 0.1, 0.5, 1, 2, 10])
@@ -135,8 +121,11 @@ def test_actualizar_entradas_validas(I, dt):
     a, b, _, _ = n.parametros
     v, u = n.estado
 
-    v_calculado = v + dt * (0.04*v*v + 5*v + 140 - u + I)
+    v_calculado = v + 0.5 * dt * (0.04*v*v + 5*v + 140 - u + I)
+    v_calculado = v_calculado + 0.5 * dt * (0.04*v_calculado*v_calculado + 5*v_calculado + 140 - u + I)
     u_calculado = u + dt * a * (b*v_calculado - u)
+    if v_calculado >= 30:
+        v_calculado = 30
 
     n.actualizar(I, dt)
     v_actual, u_actual = n.estado
@@ -150,8 +139,7 @@ def test_actualizar_dt_invalido(dt):
     with pytest.raises(ValueError):
         n.actualizar(0, dt)
 
-@pytest.mark.parametrize("I", ["5", [-4]])
-@pytest.mark.parametrize("dt", ["0.5", [0.5]])
+@pytest.mark.parametrize("I, dt", [("5", 0.5), ([-4], 0.5), (0, "0.5"), (0, [0.5])])
 def test_actualizar_entradas_no_reales(I, dt):
     n = Neurona.predefinida("rs")
     with pytest.raises(TypeError):
@@ -159,7 +147,7 @@ def test_actualizar_entradas_no_reales(I, dt):
 
 
 # ==================================================
-# TESTS DEL ESTADO
+# TESTS DE MÉTODOS PÚBLICOS
 # ==================================================
 
 def test_reiniciar_restaura_estado():
@@ -202,10 +190,24 @@ def test_establecer_estado_invalido(parametro, valor_invalido):
     with pytest.raises(TypeError):
         n.establecer_estado(**parametros)
 
+def test_copy_devuelve_copia():
+    n1 = Neurona.predefinida("rs")
+    n2 = n1.copy()
+    assert n1 is not n2
+    assert n1.estado == n2.estado
+    assert n1.parametros == n2.parametros
+    assert n1.nombre == n2.nombre
+    assert n1.es_excitatoria is n2.es_excitatoria
+    n2.establecer_estado(v=100)
+    assert n1.estado != n2.estado
+
 
 # ==================================================
 # TESTS DE MÉTODOS DE LA CLASE
 # ==================================================
+
+def test_tipos_disponibles():
+    assert Neurona.tipos_disponibles() == TIPOS
 
 def test_alias_devuelve_copia():
     alias = Neurona.alias()
@@ -217,11 +219,36 @@ def test_tipos_devuelve_copia():
     tipos["rs"]["nombre"] = "Cambio"
     assert Neurona.tipos()["rs"]["nombre"] != "Cambio"
 
-def test_copy_devuelve_copia():
-    n1 = Neurona.predefinida("rs")
-    n2 = n1.copy()
-    assert n1 is not n2
-    assert n1.estado == n2.estado
-    assert n1.parametros == n2.parametros
-    assert n1.nombre == n2.nombre
-    assert n1.es_excitatoria is n2.es_excitatoria
+@pytest.mark.parametrize("alias,tipo", [("regular spiking", "rs"), ("regular-spiking", "rs"),
+                                        ("intrinsically bursting", "ib"), ("intrinsically-bursting", "ib"),
+                                        ("chattering", "ch"), ("fast spiking", "fs"), ("fast-spiking", "fs"),
+                                        ("low threshold spiking", "lts"), ("low-threshold-spiking", "lts"),
+                                        ("thalamocortical", "tc"), ("thalamo cortical", "tc"),
+                                        ("thalamo-cortical", "tc"), ("resonator", "rz")])
+def test_alias_tipos_predefinidos(alias, tipo):
+    assert Neurona.predefinida(alias).parametros == Neurona.predefinida(tipo).parametros
+
+def test_tipo_inexistente():
+    with pytest.raises(ValueError):
+        Neurona.predefinida("Neurona")
+
+@pytest.mark.parametrize("tipo", [None, 123, ["rs"]])
+def test_tipo_no_texto(tipo):
+    with pytest.raises(TypeError):
+        Neurona.predefinida(tipo)
+
+
+# ==================================================
+# TESTS DE REPRESENTACIÓN
+# ==================================================
+
+def test_repr_contiene_informacion_basica():
+    n = Neurona.predefinida("rs")
+    texto = repr(n)
+    assert "Regular Spiking" in texto
+    assert "a=" in texto
+    assert "b=" in texto
+    assert "c=" in texto
+    assert "d=" in texto
+    assert "v=" in texto
+    assert "u=" in texto

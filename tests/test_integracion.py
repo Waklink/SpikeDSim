@@ -1,6 +1,17 @@
 import pytest
 import numpy as np
-import cupy as cp
+
+try:
+    import cupy as cp
+    try:
+        cp.zeros(1)
+        CUPY_DISPONIBLE = True
+    except Exception:
+        CUPY_DISPONIBLE = False
+except ImportError:
+    cp = None
+    CUPY_DISPONIBLE = False
+
 from src.basico.Neurona import Neurona
 from src.basico.RedDeNeuronas import RedDeNeuronas
 from src.basico.Simulador import Simulador
