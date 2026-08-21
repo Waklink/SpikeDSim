@@ -257,7 +257,7 @@ class Neurona:
     # MÉTODOS PÚBLICOS
     # --------------------------------------------------
 
-    def actualizar(self, I: float, dt: float = 0.5) -> bool:
+    def actualizar(self, I: float, dt: float = 1) -> bool:
         """
         Actualiza el estado de la neurona para un paso temporal.
 
@@ -391,8 +391,7 @@ class Neurona:
     # MÉTODOS PRIVADOS
     # --------------------------------------------------
 
-    @staticmethod
-    def _validar_numero_real(valor: object, nombre: str, mensaje: str | None = None) -> None:
+    def _validar_numero_real(self, valor: object, nombre: str, mensaje: str | None = None) -> None:
         """
         Comprueba que un valor sea un número real.
 

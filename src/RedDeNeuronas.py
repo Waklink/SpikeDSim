@@ -120,7 +120,7 @@ class RedDeNeuronas:
         Precisión utilizada para almacenar los datos internos de la red, expresada en bits. Puede
         ser 32 o 64 según el valor pasado en el constructor.
 
-    dtype : type[np.floating] | type[cp.floating]
+    dtype : np.float32 | cp.float32 | np.float64 | cp.float64
         Tipo de dato utilizado internamente por los arrays de la red. Puede ser float32 o
         float64 según la precisión seleccionada en el constructor.
 
@@ -287,7 +287,7 @@ class RedDeNeuronas:
     # MÉTODOS PÚBLICOS
     # --------------------------------------------------
 
-    def actualizar(self, I: Array | list[float] | float | int, dt: float = 0.5) -> Array:
+    def actualizar(self, I: Array | list[float] | float | int, dt: float = 1) -> Array:
         """
         Avanza un paso temporal de la simulación y actualiza el estado de todas las neuronas.
 
@@ -779,7 +779,7 @@ class RedDeNeuronas:
         self.__d = xp.empty(self.__num_neuronas, dtype=dtype)
         self.__v = xp.empty(self.__num_neuronas, dtype=dtype)
         self.__u = xp.empty(self.__num_neuronas, dtype=dtype)
-        self.__tipo = xp.empty(self.__num_neuronas, dtype=bool)
+        self.__es_excitatoria = xp.empty(self.__num_neuronas, dtype=bool)
 
         # Llenar los vectores de parámetros
         indice_actual = 0
@@ -789,7 +789,7 @@ class RedDeNeuronas:
             v, u = neurona.estado
             es_excitatoria = "excitatoria" if neurona.es_excitatoria else "inhibitoria"
 
-            self.__tipo[indice_actual:indice_actual + cantidad] = neurona.es_excitatoria
+            self.__es_excitatoria[indice_actual:indice_actual + cantidad] = neurona.es_excitatoria
 
             aleat = self.__aleat_param[es_excitatoria]
             factores = 1 + xp.asarray(rng.uniform(-1, 1, (cantidad, 4)), dtype=dtype
@@ -931,7 +931,7 @@ class RedDeNeuronas:
         # Generar pesos según tipo de neurona presináptica (columnas)
         pesos = rng.random(num_conexiones) if not self.__uso_gpu else rng.random_sample(num_conexiones)
 
-        pesos = xp.where(self.__tipo[columnas],
+        pesos = xp.where(self.__es_excitatoria[columnas],
                          pesos * self.__aleat_conex[0],
                          -pesos * self.__aleat_conex[1])
 
@@ -1052,7 +1052,7 @@ class RedDeNeuronas:
 
         return {"indice": indice,
                 "nombre": self.__nombre[indice],
-                "es_excitatoria": bool(self.__tipo[indice]),
+                "es_excitatoria": bool(self.__es_excitatoria[indice]),
                 "parametros": {"a": float(self.__a[indice]),
                                "b": float(self.__b[indice]),
                                "c": float(self.__c[indice]),
@@ -1170,7 +1170,7 @@ class RedDeNeuronas:
         list[bool]
             Lista donde True indica que es excitatoria y False inhibitoria.
         """
-        return self.__tipo.tolist()
+        return self.__es_excitatoria.tolist()
 
     @property
     def conexiones(self) -> list[list[float]]:
@@ -1249,7 +1249,7 @@ class RedDeNeuronas:
         return self.__precision
 
     @property
-    def dtype(self) -> type[np.floating] | type[cp.floating]:
+    def dtype(self) -> np.float32 | cp.float32 | np.float64 | cp.float64:
         """
         Tipo de dato utilizado internamente por la red.
 
@@ -1282,7 +1282,7 @@ class RedDeNeuronas:
         dict[str, int | float]
             Diccionario con información sobre neuronas y conexiones.
         """
-        excitatorias = int(self.__xp.count_nonzero(self.__tipo))
+        excitatorias = int(self.__xp.count_nonzero(self.__es_excitatoria))
         inhibitorias = self.__num_neuronas - excitatorias
 
         if self.__num_neuronas > 1:

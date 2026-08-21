@@ -69,7 +69,7 @@ class Simulador:
     # CONSTRUCTOR
     # --------------------------------------------------
 
-    def __init__(self, paso_temporal: float = 0.5, guardar_resultados: bool = False,
+    def __init__(self, paso_temporal: float = 1, guardar_resultados: bool = False,
                  path_guardado: str = "./historial.npz", mostrar_progreso: bool = False,
                  medir_rendimiento: bool = False, intervalo_rendimiento: int = 100,
                  tamano_batch: int = 100):
