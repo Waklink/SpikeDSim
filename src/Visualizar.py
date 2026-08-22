@@ -697,8 +697,7 @@ class Visualizar:
                            figsize: tuple[float, float] = (10, 6),
                            titulo: str = "Frecuencia de disparos",
                            max_etiquetas_leyenda: int = 10,
-                           mostrar: bool = True, tolerancia_similitud: float = 0
-                           ) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+                           mostrar: bool = True) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
         """
         Mostrar la frecuencia de disparos de una o varias neuronas.
 
@@ -742,11 +741,6 @@ class Visualizar:
             Si True, se muestra la figura mediante matplotlib.pyplot.show(). Si False, se cierra la
             figura sin mostrarla.
 
-        tolerancia_similitud : float
-            Diferencia media absoluta máxima entre las evoluciones de dos neuronas con el mismo nombre
-            para considerarlas iguales y agruparlas. Si es 0, se exige igualdad exacta. Si es menor
-            que 0, no se agruparán neuronas.
-
         Returns
         -------
         tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
@@ -776,7 +770,6 @@ class Visualizar:
         dt = hist.get("dt") if hist.get("dt") is not None else 1.0
 
         datos, indices, etiquetas = self._separar_neuronas(spikes, neuronas, hist.get("nombre"))
-        datos, etiquetas = self._agrupar_neuronas_similares(datos, indices, etiquetas, tolerancia_similitud)
 
         duracion = (datos.shape[0] - 1) * dt / 1000
         tasas = np.sum(datos, axis=0) / duracion if duracion > 0 else np.zeros(1)
@@ -789,6 +782,14 @@ class Visualizar:
         ax.set_xlabel("Neurona")
         ax.set_ylabel("Frecuencia (disparos por s)")
         ax.set_title(titulo)
+
+        if len(indices) <= max_etiquetas_leyenda:
+            ticks = np.arange(len(indices))
+        else:
+            ticks = np.linspace(0, len(indices) - 1, max_etiquetas_leyenda, dtype=int)
+
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(indices[ticks])
 
         if len(etiquetas) <= max_etiquetas_leyenda:
             ax.legend()
