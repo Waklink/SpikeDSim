@@ -215,14 +215,14 @@ def test_crear_con_matriz_de_conexiones_pesos_invalidos(peso):
 
 def test_crear_con_aleat_param_tuplas():
     red = RedDeNeuronas({"rs": 3},
-                        aleat_param={"excitatoria": (0.1, 0.1, 0.1, 0.1),
-                                     "inhibitoria": (0.1, 0.1, 0.1, 0.1)},
+                        aleat_param={"excitatoria": (0.01, 0.1, -5, 0.1),
+                                     "inhibitoria": (0.01, 0.1, -5, 0.1)},
                         semilla=10, precision=64)
     param_orig = Neurona.predefinida("rs").parametros
-    assert all(0.9 * param_orig[0] <= valor <= 1.1 * param_orig[0] for valor in red.parametros["a"])
-    assert all(0.9 * param_orig[1] <= valor <= 1.1 * param_orig[1] for valor in red.parametros["b"])
-    assert all(0.9 * abs(param_orig[2]) <= abs(valor) <= 1.1 * abs(param_orig[2]) for valor in red.parametros["c"])
-    assert all(0.9 * param_orig[3] <= valor <= 1.1 * param_orig[3] for valor in red.parametros["d"])
+    assert all(param_orig[0] <= valor <= 0.01 + param_orig[0] for valor in red.parametros["a"])
+    assert all(param_orig[1] <= valor <= 0.1 + param_orig[1] for valor in red.parametros["b"])
+    assert all(abs(param_orig[2]) <= abs(valor) <= 5 + abs(param_orig[2]) for valor in red.parametros["c"])
+    assert all(param_orig[3] <= valor <= 0.1 + param_orig[3] for valor in red.parametros["d"])
 
 def test_crear_con_aleat_param_diccionarios():
     red = RedDeNeuronas({"rs": 2},

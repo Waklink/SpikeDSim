@@ -101,8 +101,8 @@ class RedDeNeuronas:
 
     aleatorizacion : DictAleatorizacion
         Información utilizada durante la generación aleatoria de la red. Incluye los valores de
-        aleatorización relativa de los parámetros neuronales, los factores de aleatorización de
-        conexiones y la semilla utilizada para el generador de números aleatorios.
+        aleatorización de los parámetros neuronales y de las conexiones y la semilla utilizada para
+        el generador de números aleatorios.
 
     num_neuronas : int
         Número total de neuronas en la red.
@@ -189,14 +189,8 @@ class RedDeNeuronas:
             sea un entero. Por defecto vale None.
 
         aleat_param : AleatParamTuplas | AleatParam | None, optional
-            Diccionario con la amplitud máxima de la aleatorización relativa de los parámetros de
+            Diccionario con la amplitud máxima de la aleatorización de los parámetros de
             las neuronas.
-
-            Cada parámetro se modifica multiplicándolo por
-
-            1 + U(-x, x)
-
-            donde x es el valor especificado para ese parámetro.
 
             Puede especificarse mediante tuplas:
 
@@ -218,7 +212,7 @@ class RedDeNeuronas:
             caso de que aleat_param sea None, todos los valores serán 0, sin aleatorizar ningún
             parámetro.
 
-            Los valores deben estar en el intervalo [0, 1].
+            Los valores determinan las máximas modificaciones posibles de los parámetros correspondientes.
 
         aleat_conex : tuple[float, float] | None, optional
             Factores máximos para los pesos de las conexiones aleatorias.
@@ -705,7 +699,6 @@ class RedDeNeuronas:
 
         ValueError
             - Si aleat_param tiene claves distintas de excitatoria e inhibitoria, o si falta alguna de ellas.
-            - Si algún valor de los pasados no es None o no está en el intervalo [0, 1].
             - Si los valores se pasan en tuplas, y no se pasan todos los 4 valores.
         """
         valores_por_defecto = {"a": 0, "b": 0, "c": 0, "d": 0}
@@ -730,11 +723,6 @@ class RedDeNeuronas:
                            for valor in params):
                     raise TypeError("Los valores pasados deben ser None o un número.")
 
-                if not all(valor is None or (0 <= valor <= 1) for params in aleat_param.values()
-                           for valor in params):
-                    raise ValueError("Los valores pasados deben estar en el intervalo [0, 1], "
-                                     "sustituyendo cualquier None por 0")
-
                 for clave, valor in aleat_param.items():
                     for i, param in enumerate(("a", "b", "c", "d")):
                         valor_param = valor[i]
@@ -745,11 +733,6 @@ class RedDeNeuronas:
                 if not all(valor is None or isinstance(valor, Real) for params in aleat_param.values()
                            for valor in params.values()):
                     raise TypeError("Los valores pasados deben ser None o un número.")
-
-                if not all(valor is None or 0 <= valor <= 1 for params in aleat_param.values()
-                           for valor in params.values()):
-                    raise ValueError("Los valores pasados deben estar en el intervalo [0, 1], asumiéndose"
-                                    " 0 si alguno es None.")
 
                 for param in valores_por_defecto:
                     valor_exc = aleat_param["excitatoria"].get(param)
@@ -789,19 +772,18 @@ class RedDeNeuronas:
             v, u = neurona.estado
             es_excitatoria = "excitatoria" if neurona.es_excitatoria else "inhibitoria"
 
-            self.__es_excitatoria[indice_actual:indice_actual + cantidad] = neurona.es_excitatoria
-
             aleat = self.__aleat_param[es_excitatoria]
-            factores = 1 + xp.asarray(rng.uniform(-1, 1, (cantidad, 4)), dtype=dtype
-                                      ) * xp.asarray([aleat["a"], aleat["b"], aleat["c"], aleat["d"]],
-                                                     dtype=dtype)
+            sumandos = xp.asarray(rng.random((cantidad, 4), dtype=dtype) if not self.__uso_gpu else
+                       rng.random_sample((cantidad, 4)), dtype=dtype) * xp.asarray([aleat["a"],
+                       aleat["b"], aleat["c"], aleat["d"]], dtype=dtype)
 
-            self.__a[indice_actual:indice_actual + cantidad] = a * factores[:, 0]
-            self.__b[indice_actual:indice_actual + cantidad] = b * factores[:, 1]
-            self.__c[indice_actual:indice_actual + cantidad] = c * factores[:, 2]
-            self.__d[indice_actual:indice_actual + cantidad] = d * factores[:, 3]
+            self.__a[indice_actual:indice_actual + cantidad] = a + sumandos[:, 0]
+            self.__b[indice_actual:indice_actual + cantidad] = b + sumandos[:, 1]
+            self.__c[indice_actual:indice_actual + cantidad] = c + sumandos[:, 2]
+            self.__d[indice_actual:indice_actual + cantidad] = d + sumandos[:, 3]
             self.__v[indice_actual:indice_actual + cantidad] = v
             self.__u[indice_actual:indice_actual + cantidad] = u
+            self.__es_excitatoria[indice_actual:indice_actual + cantidad] = neurona.es_excitatoria
             indice_actual += cantidad
 
         # Guardar el estado inicial de la red
@@ -1003,22 +985,24 @@ class RedDeNeuronas:
         validados previamente.
         """
         spikes_previos = (self.__v >= 30)
+        v = self.__v
+        u = self.__u
 
         if spikes_previos.any():
-            self.__v[spikes_previos] = self.__c[spikes_previos]
-            self.__u[spikes_previos] += self.__d[spikes_previos]
+            v[spikes_previos] = self.__c[spikes_previos]
+            u[spikes_previos] += self.__d[spikes_previos]
 
         I_total = self.__conexiones.dot(spikes_previos.astype(self.__dtype)) + I
 
         # Evitar posibles asignaciones intermedias de elevar al cuadrado haciendo la multiplicación
         # directamente
         # Calcular v en dos pasos para estabilidad numérica
-        self.__v += 0.5 * dt * ((0.04 * self.__v * self.__v + 5 * self.__v + 140 - self.__u + I_total))
-        self.__v += 0.5 * dt * ((0.04 * self.__v * self.__v + 5 * self.__v + 140 - self.__u + I_total))
-        self.__u += dt * (self.__a * (self.__b * self.__v - self.__u))
+        v += 0.5 * dt * ((0.04 * v * v + 5 * v + 140 - u + I_total))
+        v += 0.5 * dt * ((0.04 * v * v + 5 * v + 140 - u + I_total))
+        u += dt * (self.__a * (self.__b * v - u))
 
-        spikes_actuales = (self.__v >= 30)
-        self.__v[spikes_actuales] = self.__dtype(30)
+        spikes_actuales = (v >= 30)
+        v[spikes_actuales] = self.__dtype(30)
 
         return spikes_actuales
 
@@ -1206,7 +1190,7 @@ class RedDeNeuronas:
         Returns
         -------
         DictAleatorizacion
-            Diccionario con los valores de aleatorización relativos de los parámetros y de los pesos
+            Diccionario con los valores de aleatorización de los parámetros y de los pesos
             de las conexiones, junto con la semilla usada.
         """
         aleat_param = {clave: valor.copy() for clave, valor in self.__aleat_param.items()}

@@ -404,7 +404,7 @@ def test_historial_devuelve_copia(simulador):
     assert simulador.historial["I"][0] != 10
     assert simulador.historial["nombre"][0] != "Prueba"
     assert bool(simulador.historial["es_excitatoria"][0])
-    assert simulador.historial["dt"] == 0.5
+    assert simulador.historial["dt"] == 1
 
 def test_historial_dtype_distinto_de_red_dtype():
     red = RedDeNeuronas({"rs": 1}, precision=64)
@@ -447,7 +447,7 @@ def test_guardar_historial_npz_red_con_1_neurona(simulador):
     assert len(datos["nombre"]) == 1
     assert len(datos["es_excitatoria"]) == 1
     assert datos["I"].shape == (6,)
-    assert datos["dt"] == 0.5
+    assert datos["dt"] == 1
 
     datos.close()
 
@@ -471,7 +471,7 @@ def test_guardar_historial_npz_red_con_2_neuronas():
     assert len(datos["nombre"]) == 2
     assert len(datos["es_excitatoria"]) == 2
     assert datos["I"].shape == (6,2)
-    assert datos["dt"] == 0.5
+    assert datos["dt"] == 1
 
     datos.close()
 
@@ -508,7 +508,7 @@ def test_guardar_historial_json():
     assert all(len(datos["I"][i]) == 2 for i in range(6))
     assert len(datos["nombre"]) == 2
     assert len(datos["es_excitatoria"]) == 2
-    assert datos["dt"] == 0.5
+    assert datos["dt"] == 1
 
 def test_guardar_historial_csv(simulador):
     simulador.simular(5)
@@ -756,7 +756,7 @@ def test_simular_en_gpu_batch_incompleto():
     assert hist["I"].shape == (11,)
     assert len(hist["nombre"]) == 1
     assert len(hist["es_excitatoria"]) == 1
-    assert hist["dt"] == 0.5
+    assert hist["dt"] == 1
 
 @pytest.mark.skipif(not CUPY_DISPONIBLE, reason="CuPy/GPU no disponible.")
 def test_simular_en_gpu_batch_con_restante():
@@ -771,4 +771,4 @@ def test_simular_en_gpu_batch_con_restante():
     assert hist["I"].shape == (11,)
     assert len(hist["nombre"]) == 1
     assert len(hist["es_excitatoria"]) == 1
-    assert hist["dt"] == 0.5
+    assert hist["dt"] == 1

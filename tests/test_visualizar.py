@@ -61,7 +61,7 @@ def comprobar_historial_completo(hist, num_neuronas: int, pasos: int = 5):
     else:
         assert all(hist[clave].shape == ((num_neuronas,) if pasos == 0 else (pasos + 1, num_neuronas)) for clave in CLAVES[:4])
     assert all(len(hist[clave]) == num_neuronas for clave in CLAVES[4:6])
-    assert hist[CLAVES[6]] == 0.5
+    assert hist[CLAVES[6]] == 1
 
 def comprobar_historial_parcial(hist, num_neuronas: int, pasos: int= 5):
     assert hist is not None
@@ -74,7 +74,7 @@ def comprobar_historial_parcial(hist, num_neuronas: int, pasos: int= 5):
     else:
         assert all((hist[clave] is None) or (hist[clave].shape == ((num_neuronas,) if pasos == 0 else (pasos + 1, num_neuronas))) for clave in CLAVES[:4])
     assert all((hist[clave] is None) or (len(hist[clave]) == num_neuronas) for clave in CLAVES[4:6])
-    assert (hist[CLAVES[6]] is None) or (hist[CLAVES[6]] == 0.5)
+    assert (hist[CLAVES[6]] is None) or (hist[CLAVES[6]] == 1)
 
 
 # ==================================================
@@ -382,7 +382,7 @@ def test_historial_devuelve_copia(simulador):
     hist["I"][0] = 10
     hist["nombre"][0] = "Prueba"
     hist["es_excitatoria"][0] = False
-    hist["dt"] = 1
+    hist["dt"] = 0.5
     
     hist2 = vis.historial
     assert not np.array_equal(hist2["spikes"], hist["spikes"])

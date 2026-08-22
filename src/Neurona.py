@@ -391,6 +391,7 @@ class Neurona:
     # MÉTODOS PRIVADOS
     # --------------------------------------------------
 
+    @classmethod
     def _validar_numero_real(self, valor: object, nombre: str, mensaje: str | None = None) -> None:
         """
         Comprueba que un valor sea un número real.
