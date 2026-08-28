@@ -1177,15 +1177,15 @@ class Simulador:
         Todos los valores de rendimiento actuales, si no se ha recogido alguno, aparecerá como None.
 
         Estos valores son:
-        - tiempo
-        - cpu_media
-        - cpu_maxima
-        - ram_media
-        - ram_maxima
-        - gpu_media
-        - gpu_maxima
-        - vram_media
-        - vram_maxima
+        - tiempo (s)
+        - cpu_media (%)
+        - cpu_maxima (%)
+        - ram_media (MB)
+        - ram_maxima (MB)
+        - gpu_media (%)
+        - gpu_maxima (%)
+        - vram_media (MB)
+        - vram_maxima (MB)
 
         Representan el tiempo de ejecución, y los valores de uso de recursos como cpu, memoria ram,
         etc. medios y máximos de la última simulación.
