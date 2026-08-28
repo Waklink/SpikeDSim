@@ -107,11 +107,33 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
     elif start < 0 or start > len(CONFIGURACIONES_PRUEBAS):
         raise ValueError(f"start debe estar entre 0 y {len(CONFIGURACIONES_PRUEBAS) - 1}.")
 
-    total_pruebas = (stop - 1) * 16 * REP
-    total_pruebas += (2 * REP if start == 0 else 0)
-    prueba_actual = 0
+    if start >= stop:
+        raise ValueError("start debe ser menor que stop.")
 
-    print(f"Iniciando pruebas: {total_pruebas} pruebas | Configuraciones: {start} a {stop - 1}")
+    # Número de configuraciones que se van a ejecutar
+    num_configuraciones = stop - start
+
+    # Cada configuración de red tiene 16 pruebas.
+    # La configuración 0 (neurona) tiene 2 pruebas.
+    if start == 0:
+        total_pruebas = (2 + (num_configuraciones - 1) * 16) * REP
+    else:
+        total_pruebas = num_configuraciones * 16 * REP
+
+    inicio_pruebas = CONFIGURACIONES_PRUEBAS[start]["ids"][0] * REP
+    fin_pruebas = (CONFIGURACIONES_PRUEBAS[stop - 1]["ids"][1] + 1) * REP - 1
+
+    if num_configuraciones == 1:
+        texto_configuraciones = f"Configuración: {start}"
+    else:
+        texto_configuraciones = f"Configuraciones: {start} a {stop - 1}"
+
+    pruebas_restantes = (2 + (len(CONFIGURACIONES_PRUEBAS) - 1) * 16) * REP - (fin_pruebas + 1)
+    pruebas = inicio_pruebas + total_pruebas - 1
+
+    prueba_actual = inicio_pruebas - 1
+
+    print(f"Iniciando pruebas: {inicio_pruebas} a {fin_pruebas} | {texto_configuraciones} | Total: {total_pruebas} pruebas | Restantes: {pruebas_restantes}")
     print(f"Resultados: {path}\n")
 
 
@@ -134,7 +156,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
             for repeticion in range(REP):
                 prueba_actual += 1
 
-                print(f"[{prueba_actual}/{total_pruebas}] ID={id_prueba} | rep={repeticion} | Neurona"
+                print(f"[{prueba_actual}/{pruebas}] ID={id_prueba} | rep={repeticion} | Neurona"
                       f" | progreso={param_sim} | rendimiento={param_sim}", flush=True)
 
                 tiempo, rendimiento = lanzar_simulacion(ejecutar_neurona, neurona, corriente, param_sim)
@@ -153,7 +175,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
 
                 guardar_resultado(resultado, path)
 
-                print(f"\t[{prueba_actual}/{total_pruebas}] Completada: {tiempo:.4f} s", flush=True)
+                print(f"\tCompletada: {tiempo:.4f} s", flush=True)
 
         corriente = None
 
@@ -186,7 +208,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                         for repeticion in range(REP):
                             prueba_actual += 1
 
-                            print(f"[{prueba_actual}/{total_pruebas}] ID={id_prueba} | rep={repeticion}"
+                            print(f"[{prueba_actual}/{pruebas}] ID={id_prueba} | rep={repeticion}"
                                   f" | N={num_neuronas} | conex={parametros_base['conexiones']} | "
                                   f"dens={densidad} | sparse={sparse} | float{precision} | {backend}"
                                   f" | prog={param_sim} | rend={param_sim}", flush=True)
@@ -222,9 +244,9 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
 
         corriente = None
 
-    print(f"\nPruebas completadas: {prueba_actual}/{total_pruebas}")
+    print(f"\nPruebas completadas: {prueba_actual}/{pruebas}")
     print(f"Resultados guardados en: {path}")
 
 
 if __name__ == "__main__":
-    ejecutar_pruebas(1, 3)
+    ejecutar_pruebas(0, 3)
