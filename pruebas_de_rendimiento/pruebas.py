@@ -1,5 +1,7 @@
-import numpy as np
+import time
 import csv
+
+import numpy as np
 
 from pathlib import Path
 from multiprocessing import Process, Queue
@@ -7,6 +9,11 @@ from multiprocessing import Process, Queue
 from src.Neurona import Neurona
 from src.RedDeNeuronas import RedDeNeuronas
 from src.Simulador import Simulador
+
+# Comprobar si cupy está disponible, para evitar problemas más adelante
+import cupy as cp
+cp.zeros(1)
+cp = None
 
 
 # Número de repeticiones por prueba
@@ -77,7 +84,11 @@ def lanzar_simulacion(ejecutar, parametros, corriente, param_sim):
     if proceso.exitcode != 0:
         raise RuntimeError(f"La prueba terminó con un error. Código de salida: {proceso.exitcode}")
 
-    return queue.get()
+    resultado = queue.get()
+    queue.close()
+    queue.join_thread()
+
+    return resultado
 
 
 def guardar_resultado(resultado, path):
@@ -104,11 +115,14 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
 
     if not isinstance(start, int):
         raise TypeError("start debe ser un entero.")
-    elif start < 0 or start > len(CONFIGURACIONES_PRUEBAS):
+    elif start < 0 or start >= len(CONFIGURACIONES_PRUEBAS):
         raise ValueError(f"start debe estar entre 0 y {len(CONFIGURACIONES_PRUEBAS) - 1}.")
 
     if start >= stop:
         raise ValueError("start debe ser menor que stop.")
+
+    # Tiempo para realizar las pruebas
+    tiempo_inicio = time.perf_counter()
 
     # Número de configuraciones que se van a ejecutar
     num_configuraciones = stop - start
@@ -153,7 +167,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
             param_sim = bool(id_prueba)
 
             # REP repeticiones
-            for repeticion in range(REP):
+            for repeticion in range(1, REP + 1):
                 prueba_actual += 1
 
                 print(f"[{prueba_actual}/{pruebas}] ID={id_prueba} | rep={repeticion} | Neurona"
@@ -176,8 +190,6 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                 guardar_resultado(resultado, path)
 
                 print(f"\tCompletada: {tiempo:.4f} s", flush=True)
-
-        corriente = None
 
 
     # --------------------------------------------------
@@ -205,13 +217,13 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                 for backend in ("numpy", "cupy"):
                     for param_sim in (False, True):
                         # REP repeticiones
-                        for repeticion in range(REP):
+                        for repeticion in range(1, REP + 1):
                             prueba_actual += 1
 
                             print(f"[{prueba_actual}/{pruebas}] ID={id_prueba} | rep={repeticion}"
                                   f" | N={num_neuronas} | conex={parametros_base['conexiones']} | "
                                   f"dens={densidad} | sparse={sparse} | float{precision} | {backend}"
-                                  f" | prog={param_sim} | rend={param_sim}", flush=True)
+                                  f" | barra={param_sim} | rend={param_sim}", flush=True)
 
                             parametros_red = {**parametros_base,
                                             "sparse": sparse,
@@ -242,11 +254,12 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
 
                         id_prueba += 1
 
-        corriente = None
+    duracion = time.perf_counter() - tiempo_inicio
 
     print(f"\nPruebas completadas: {prueba_actual}/{pruebas}")
     print(f"Resultados guardados en: {path}")
+    print(f"Duración de las pruebas: {duracion:.4f} s")
 
 
 if __name__ == "__main__":
-    ejecutar_pruebas(0, 3)
+    ejecutar_pruebas()
