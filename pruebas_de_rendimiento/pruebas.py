@@ -31,24 +31,24 @@ ALEAT_PARAM = {"excitatoria": (0, 0, 15, -6), "inhibitoria": (0.08, -0.05, 0, 0)
 ALEAT_CONEX = (0.5, 1)
 
 CONFIGURACIONES_PRUEBAS = [
-    {"ids": (0,   1),   "parametros_red": {"neuronas": N_EXC,                      "conexiones": None},     "num_neuronas": 1,     "densidad_conexiones": None},
-    {"ids": (2,   17),  "parametros_red": {"neuronas": {N_EXC: 1},                 "conexiones": 0},        "num_neuronas": 1,     "densidad_conexiones": 0},
-    {"ids": (18,  33),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 0},        "num_neuronas": 10,    "densidad_conexiones": 0},
-    {"ids": (34,  49),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 45},       "num_neuronas": 10,    "densidad_conexiones": 0.5},
-    {"ids": (50,  65),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 90},       "num_neuronas": 10,    "densidad_conexiones": 1},
-    {"ids": (66,  81),  "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 0},        "num_neuronas": 100,   "densidad_conexiones": 0},
-    {"ids": (82,  97),  "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 990},      "num_neuronas": 100,   "densidad_conexiones": 0.1},
-    {"ids": (98,  113), "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 4950},     "num_neuronas": 100,   "densidad_conexiones": 0.5},
-    {"ids": (114, 129), "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 9900},     "num_neuronas": 100,   "densidad_conexiones": 1},
-    {"ids": (130, 145), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 0},        "num_neuronas": 1000,  "densidad_conexiones": 0},
-    {"ids": (146, 161), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 99900},    "num_neuronas": 1000,  "densidad_conexiones": 0.1},
-    {"ids": (162, 177), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 249750},   "num_neuronas": 1000,  "densidad_conexiones": 0.25},
-    {"ids": (178, 193), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 499500},   "num_neuronas": 1000,  "densidad_conexiones": 0.5},
-    {"ids": (194, 209), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 999000},   "num_neuronas": 1000,  "densidad_conexiones": 1},
-    {"ids": (210, 225), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 0},        "num_neuronas": 10000, "densidad_conexiones": 0},
-    {"ids": (226, 241), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 9999000},  "num_neuronas": 10000, "densidad_conexiones": 0.1},
-    {"ids": (242, 257), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 49995000}, "num_neuronas": 10000, "densidad_conexiones": 0.5},
-    {"ids": (258, 273), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 99990000}, "num_neuronas": 10000, "densidad_conexiones": 1}
+    {"ids": (1,   2),   "parametros_red": {"neuronas": N_EXC,                      "conexiones": None},     "num_neuronas": 1,     "densidad_conexiones": None},
+    {"ids": (3,   18),  "parametros_red": {"neuronas": {N_EXC: 1},                 "conexiones": 0},        "num_neuronas": 1,     "densidad_conexiones": 0},
+    {"ids": (19,  34),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 0},        "num_neuronas": 10,    "densidad_conexiones": 0},
+    {"ids": (34,  50),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 45},       "num_neuronas": 10,    "densidad_conexiones": 0.5},
+    {"ids": (51,  66),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 90},       "num_neuronas": 10,    "densidad_conexiones": 1},
+    {"ids": (67,  82),  "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 0},        "num_neuronas": 100,   "densidad_conexiones": 0},
+    {"ids": (83,  98),  "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 990},      "num_neuronas": 100,   "densidad_conexiones": 0.1},
+    {"ids": (99,  114), "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 4950},     "num_neuronas": 100,   "densidad_conexiones": 0.5},
+    {"ids": (115, 130), "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 9900},     "num_neuronas": 100,   "densidad_conexiones": 1},
+    {"ids": (131, 146), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 0},        "num_neuronas": 1000,  "densidad_conexiones": 0},
+    {"ids": (147, 162), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 99900},    "num_neuronas": 1000,  "densidad_conexiones": 0.1},
+    {"ids": (163, 178), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 249750},   "num_neuronas": 1000,  "densidad_conexiones": 0.25},
+    {"ids": (179, 194), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 499500},   "num_neuronas": 1000,  "densidad_conexiones": 0.5},
+    {"ids": (195, 210), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 999000},   "num_neuronas": 1000,  "densidad_conexiones": 1},
+    {"ids": (211, 226), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 0},        "num_neuronas": 10000, "densidad_conexiones": 0},
+    {"ids": (227, 242), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 9999000},  "num_neuronas": 10000, "densidad_conexiones": 0.1},
+    {"ids": (243, 258), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 49995000}, "num_neuronas": 10000, "densidad_conexiones": 0.5},
+    {"ids": (259, 274), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 99990000}, "num_neuronas": 10000, "densidad_conexiones": 1}
 ]
 
 def ejecutar_neurona(queue, neurona, corriente, param_sim):
@@ -134,15 +134,15 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
     else:
         total_pruebas = num_configuraciones * 16 * REP
 
-    inicio_pruebas = CONFIGURACIONES_PRUEBAS[start]["ids"][0] * REP
-    fin_pruebas = (CONFIGURACIONES_PRUEBAS[stop - 1]["ids"][1] + 1) * REP - 1
+    inicio_pruebas = (CONFIGURACIONES_PRUEBAS[start]["ids"][0] - 1) * REP + 1
+    fin_pruebas = (CONFIGURACIONES_PRUEBAS[stop - 1]["ids"][1]) * REP
 
     if num_configuraciones == 1:
         texto_configuraciones = f"Configuración: {start}"
     else:
         texto_configuraciones = f"Configuraciones: {start} a {stop - 1}"
 
-    pruebas_restantes = (2 + (len(CONFIGURACIONES_PRUEBAS) - 1) * 16) * REP - (fin_pruebas + 1)
+    pruebas_restantes = (2 + (len(CONFIGURACIONES_PRUEBAS) - 1) * 16) * REP - fin_pruebas
     pruebas = inicio_pruebas + total_pruebas - 1
 
     prueba_actual = inicio_pruebas - 1
@@ -163,9 +163,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
         # Corriente
         corriente = 5 * rng.standard_normal(1000)
 
-        for id_prueba in ids:
-            param_sim = bool(id_prueba)
-
+        for param_sim, id_prueba in zip((False, True), ids):
             # REP repeticiones
             for repeticion in range(1, REP + 1):
                 prueba_actual += 1
