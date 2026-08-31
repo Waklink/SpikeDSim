@@ -256,7 +256,7 @@ class RedDeNeuronas:
             raise TypeError("La semilla debe ser un entero.")
 
         self.__semilla = semilla
-        self.__rng = np.random.default_rng(semilla) if not self.__uso_gpu else cp.random.RandomState(semilla)
+        self.__rng = self.__xp.random.RandomState(semilla)
 
         # Aleatorización de los parámetros
         self.__aleat_param = self._normalizar_aleat_param(aleat_param)
@@ -275,6 +275,11 @@ class RedDeNeuronas:
 
         # Guardar número de conexiones que existan.
         self.__num_conexiones = self.__conexiones.nnz if self.__sparse else int(self.__xp.count_nonzero(self.__conexiones))
+
+        # Liberar memoria de VRAM reservada que no se está utilizando
+        if self.__uso_gpu:
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.get_default_pinned_memory_pool().free_all_blocks()
 
 
     # --------------------------------------------------
@@ -773,8 +778,7 @@ class RedDeNeuronas:
             es_excitatoria = "excitatoria" if neurona.es_excitatoria else "inhibitoria"
 
             aleat = self.__aleat_param[es_excitatoria]
-            sumandos = xp.asarray(rng.random((cantidad, 4), dtype=dtype) if not self.__uso_gpu else
-                       rng.random_sample((cantidad, 4)), dtype=dtype) * xp.asarray([aleat["a"],
+            sumandos = xp.asarray(rng.random_sample((cantidad, 4)), dtype=dtype) * xp.asarray([aleat["a"],
                        aleat["b"], aleat["c"], aleat["d"]], dtype=dtype)
 
             self.__a[indice_actual:indice_actual + cantidad] = a + sumandos[:, 0]
@@ -881,50 +885,110 @@ class RedDeNeuronas:
         """
         xp = self.__xp
         rng = self.__rng
+        n = self.__num_neuronas
 
         # Máximo número de conexiones posibles (sin diagonal)
-        max_conexiones = self.__num_neuronas * (self.__num_neuronas - 1)
+        max_conexiones = n * (n - 1)
 
         if num_conexiones < 0:
             raise ValueError("La cantidad de conexiones a crear debe ser un entero mayor o igual a 0.")
-        elif num_conexiones > max_conexiones:
+
+        if num_conexiones > max_conexiones:
             raise ValueError(f"No se pueden crear {num_conexiones} conexiones. Máximo permitido: {max_conexiones}")
 
         # Caso sin conexiones
         if num_conexiones == 0:
             self.__aleat_conex = None
+
             if self.__sparse:
-                self.__conexiones = self.__sp.csr_matrix((self.__num_neuronas, self.__num_neuronas),
-                                                         dtype=self.__dtype)
+                self.__conexiones = self.__sp.csr_matrix((n, n), dtype=self.__dtype)
             else:
-                self.__conexiones = xp.zeros((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
+                self.__conexiones = xp.zeros((n, n), dtype=self.__dtype)
+
             return
 
-        # Seleccionar posiciones aleatorias fuera de la diagonal
-        seleccion = rng.choice(max_conexiones, size=num_conexiones, replace=False)
+        # --------------------------------------------------
+        # Selección de posiciones
+        # --------------------------------------------------
 
-        # Convertir índices lineales a fila y columna
-        filas = seleccion // (self.__num_neuronas - 1)
-        columnas = seleccion % (self.__num_neuronas - 1)
+        if num_conexiones <= max_conexiones // 2:
+            # Seleccionar directamente las conexiones existentes.
+            seleccion = rng.choice(max_conexiones, size=num_conexiones, replace=False)
 
-        # Ajustar para saltar diagonal
-        columnas = xp.where(columnas >= filas, columnas + 1, columnas)
+            # Ordenar para que las posiciones queden agrupadas por fila.
+            seleccion.sort()
 
-        # Generar pesos según tipo de neurona presináptica (columnas)
-        pesos = rng.random(num_conexiones) if not self.__uso_gpu else rng.random_sample(num_conexiones)
+        elif num_conexiones == max_conexiones:
+            # Todas las posiciones posibles.
+            seleccion = None
 
-        pesos = xp.where(self.__es_excitatoria[columnas],
-                         pesos * self.__aleat_conex[0],
-                         -pesos * self.__aleat_conex[1])
+        else:
+            # Seleccionar únicamente las posiciones que NO existirán.
+            num_faltantes = max_conexiones - num_conexiones
+
+            faltantes = rng.choice(max_conexiones, size=num_faltantes, replace=False)
+            faltantes.sort()
+
+            mascara = xp.ones(max_conexiones, dtype=bool)
+            mascara[faltantes] = False
+
+            seleccion = xp.nonzero(mascara)[0]
+
+            del faltantes, mascara
+
+        # --------------------------------------------------
+        # Convertir posiciones lineales a fila/columna
+        # --------------------------------------------------
+
+        if seleccion is None:
+            # Caso de densidad máxima.
+            #
+            # No existe ninguna selección aleatoria que realizar:
+            # todas las posiciones fuera de la diagonal existen.
+            filas = xp.repeat(xp.arange(n, dtype=int), n - 1)
+            columnas = xp.tile(xp.arange(n - 1, dtype=int), n)
+            columnas = xp.where(columnas >= filas, columnas + 1, columnas)
+        else:
+            filas = seleccion // (n - 1)
+            columnas = seleccion % (n - 1)
+            columnas = xp.where(columnas >= filas, columnas + 1, columnas)
+
+
+        # --------------------------------------------------
+        # Generar pesos
+        # --------------------------------------------------
+
+        pesos = rng.random_sample(num_conexiones).astype(self.__dtype)
+
+        signos= self.__es_excitatoria[columnas]
+        factor_exc = self.__dtype(self.__aleat_conex[0])
+        factor_inh = -self.__dtype(self.__aleat_conex[1])
+        pesos *= xp.where(signos, factor_exc, factor_inh)
+
+        # --------------------------------------------------
+        # Crear conexiones
+        # --------------------------------------------------
 
         if self.__sparse:
-            # Crear matriz CSR
-            self.__conexiones = self.__sp.csr_matrix((pesos, (filas, columnas)),
-                                                     shape=(self.__num_neuronas, self.__num_neuronas), 
+            # Como seleccion está ordenada por posición lineal, las conexiones ya están ordenadas
+            # por filas.
+            #
+            # Por tanto podemos construir directamente la CSR, sin pasar por COO.
+            indices = columnas
+
+            if seleccion is None:
+                # Todas las posiciones posibles están ocupadas:
+                # cada fila tiene exactamente n - 1 conexiones.
+                indptr = xp.arange(0, max_conexiones + 1, n - 1, dtype=int)
+            else:
+                # seleccion está ordenada, por lo que las posiciones están agrupadas por filas.
+                # searchsorted obtiene directamente cuántas conexiones hay acumuladas hasta cada fila.
+                indptr = xp.searchsorted(seleccion, xp.arange(n + 1, dtype=int) * (n - 1), side="left")
+
+            self.__conexiones = self.__sp.csr_matrix((pesos, indices, indptr), shape=(n, n),
                                                      dtype=self.__dtype)
         else:
-            # Crear matriz densa
-            self.__conexiones = xp.zeros((self.__num_neuronas, self.__num_neuronas), dtype=self.__dtype)
+            self.__conexiones = xp.zeros((n, n), dtype=self.__dtype)
             self.__conexiones[filas, columnas] = pesos
 
     def _validar_conexiones(self) -> None:
@@ -937,7 +1001,7 @@ class RedDeNeuronas:
         ValueError
             - Si las dimensiones de la matriz son incorrectas.
             - Si la diagonal principal de la matriz no es 0.
-            - Si alguno de los pesos está fuera del intervalo (-1, 1)
+            - Si alguno de los pesos está fuera del intervalo [-1, 1]
         """
         if self.__conexiones.shape != (self.__num_neuronas, self.__num_neuronas):
             raise ValueError("Dimensiones incorrectas de la matriz de conexiones.")
@@ -950,8 +1014,8 @@ class RedDeNeuronas:
         else:
             datos = self.__conexiones
 
-        if self.__xp.any((datos <= -1) | (datos >= 1)):
-            raise ValueError("Los pesos de las conexiones deben estar en el intervalo (-1, 1).")
+        if self.__xp.any((datos < -1) | (datos > 1)):
+            raise ValueError("Los pesos de las conexiones deben estar en el intervalo [-1, 1].")
 
     def _actualizar(self, I: Array | float, dt: float) -> Array:
         """
@@ -1184,8 +1248,7 @@ class RedDeNeuronas:
 
         Si la matriz de conexiones no se ha generado aleatoriamente, aleat_conex será None.
 
-        Los valores de aleat_param están en el intervalo [0, 1], mientras que los valores de
-        aleat_conex están en el intervalo (0, 1].
+        Los valores de aleat_conex están en el intervalo (0, 1].
 
         Returns
         -------

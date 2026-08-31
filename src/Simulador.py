@@ -398,7 +398,7 @@ class Simulador:
             raise TypeError("Los pasos deben ser un entero.")
 
         if pasos < 0:
-            raise ValueError("Los pasos a simular deben ser un entero positivo.")
+            raise ValueError("Los pasos a simular deben ser un entero mayor o igual a 0.")
 
 
         # Reiniciar las métricas de rendimiento
@@ -1196,7 +1196,7 @@ class Simulador:
             Diccionario con los valores de rendimiento recogidos en la última simulación.
         """
         return {
-            "tiempo": self.__tiempo_ejecucion,
+            "tiempo_ejecucion": self.__tiempo_ejecucion,
             "cpu_media": self.__cpu_media,
             "cpu_maxima": self.__cpu_maxima,
             "ram_media": self.__ram_media,
