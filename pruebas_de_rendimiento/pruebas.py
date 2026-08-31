@@ -17,7 +17,7 @@ cp = None
 
 
 # Número de repeticiones por prueba
-REP = 10
+REP = 5
 
 # Neuronas a usar para las pruebas
 N_EXC = Neurona(a=0.02, b=0.2, c=-65, d=8, nombre="Neurona_excitatoria", es_excitatoria=True)
@@ -44,11 +44,13 @@ CONFIGURACIONES_PRUEBAS = [
     {"ids": (147, 162), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 99900},    "num_neuronas": 1000,  "densidad_conexiones": 0.1},
     {"ids": (163, 178), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 249750},   "num_neuronas": 1000,  "densidad_conexiones": 0.25},
     {"ids": (179, 194), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 499500},   "num_neuronas": 1000,  "densidad_conexiones": 0.5},
-    {"ids": (195, 210), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 999000},   "num_neuronas": 1000,  "densidad_conexiones": 1},
-    {"ids": (211, 226), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 0},        "num_neuronas": 10000, "densidad_conexiones": 0},
-    {"ids": (227, 242), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 9999000},  "num_neuronas": 10000, "densidad_conexiones": 0.1},
-    {"ids": (243, 258), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 49995000}, "num_neuronas": 10000, "densidad_conexiones": 0.5},
-    {"ids": (259, 274), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 99990000}, "num_neuronas": 10000, "densidad_conexiones": 1}
+    {"ids": (195, 210), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 749250},   "num_neuronas": 1000,  "densidad_conexiones": 0.75},
+    {"ids": (211, 226), "parametros_red": {"neuronas": {N_EXC: 800, N_INH: 200},   "conexiones": 999000},   "num_neuronas": 1000,  "densidad_conexiones": 1},
+    {"ids": (227, 242), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 0},        "num_neuronas": 10000, "densidad_conexiones": 0},
+    {"ids": (243, 258), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 9999000},  "num_neuronas": 10000, "densidad_conexiones": 0.1},
+    {"ids": (259, 274), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 49995000}, "num_neuronas": 10000, "densidad_conexiones": 0.5},
+    {"ids": (275, 290), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 74992500}, "num_neuronas": 10000, "densidad_conexiones": 0.75},
+    {"ids": (291, 306), "parametros_red": {"neuronas": {N_EXC: 8000, N_INH: 2000}, "conexiones": 99990000}, "num_neuronas": 10000, "densidad_conexiones": 1}
 ]
 
 def ejecutar_neurona(queue, neurona, corriente, param_sim):
@@ -65,12 +67,8 @@ def ejecutar_red(queue, parametros_red, corriente, param_sim):
     _simular_y_obtener_resultados(simulador, queue, corriente, param_sim)
 
 def _simular_y_obtener_resultados(simulador, queue, corriente, param_sim):
-    tiempo = simulador.simular(pasos=1000, I=corriente, mostrar_progreso=param_sim,
-                               medir_rendimiento=param_sim)
-
-    # rendimiento = simulador.rendimiento if param_sim else None
-
-    queue.put((tiempo, simulador.rendimiento))
+    simulador.simular(pasos=1000, I=corriente, mostrar_progreso=param_sim, medir_rendimiento=param_sim)
+    queue.put(simulador.rendimiento)
 
 
 def lanzar_simulacion(ejecutar, parametros, corriente, param_sim):
@@ -171,7 +169,9 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                 print(f"[{prueba_actual}/{pruebas}] ID={id_prueba} | rep={repeticion} | Neurona"
                       f" | progreso={param_sim} | rendimiento={param_sim}", flush=True)
 
-                tiempo, rendimiento = lanzar_simulacion(ejecutar_neurona, neurona, corriente, param_sim)
+                tiempo_inicial = time.perf_counter()
+                rendimiento = lanzar_simulacion(ejecutar_neurona, neurona, corriente, param_sim)
+                tiempo = time.perf_counter() - tiempo_inicial
 
                 resultado = {"id": id_prueba,
                              "repeticion": repeticion,
@@ -183,6 +183,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                              "backend": None,
                              "mostrar_progreso": param_sim,
                              "medir_rendimiento": param_sim,
+                             "tiempo_total": tiempo,
                              **rendimiento}
 
                 guardar_resultado(resultado, path)
@@ -231,8 +232,10 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                                             "aleat_param": ALEAT_PARAM,
                                             "aleat_conex": ALEAT_CONEX}
 
-                            tiempo, rendimiento = lanzar_simulacion(ejecutar_red, parametros_red, corriente,
+                            tiempo_inicial = time.perf_counter()
+                            rendimiento = lanzar_simulacion(ejecutar_red, parametros_red, corriente,
                                                             param_sim)
+                            tiempo = time.perf_counter() - tiempo_inicial
 
                             resultado = {"id": id_prueba,
                                          "repeticion": repeticion,
@@ -244,6 +247,7 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
                                          "backend": backend,
                                          "mostrar_progreso": param_sim,
                                          "medir_rendimiento": param_sim,
+                                         "tiempo_total": tiempo,
                                          **rendimiento}
 
                             guardar_resultado(resultado, path)
@@ -256,8 +260,8 @@ def ejecutar_pruebas(start = 0, stop = None, path = "./pruebas_de_rendimiento/re
 
     print(f"\nPruebas completadas: {prueba_actual}/{pruebas}")
     print(f"Resultados guardados en: {path}")
-    print(f"Duración de las pruebas: {duracion:.4f} s")
+    print(f"Duración real de las pruebas: {duracion:.4f} s")
 
 
 if __name__ == "__main__":
-    ejecutar_pruebas()
+    ejecutar_pruebas(0, 20, "./pruebas_de_rendimiento/resultados.csv")
