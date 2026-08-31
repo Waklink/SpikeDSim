@@ -77,7 +77,7 @@ def test_crear_simulador():
     assert sim.paso_actual == 0
     assert sim.historial is None
     for clave, valor in sim.rendimiento.items():
-        if clave != "tiempo":
+        if clave != "tiempo_ejecucion":
             assert valor is None
         else:
             assert valor == 0
@@ -621,9 +621,9 @@ def test_limpiar_historial(simulador):
 def test_limpiar_rendimiento(simulador):
     simulador.simular(10, medir_rendimiento=True, intervalo_rendimiento=1)
     for clave, valor in simulador.rendimiento.items():
-        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
+        if clave not in ("tiempo_ejecucion", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
             assert valor is not None
-        elif clave == "tiempo":
+        elif clave == "tiempo_ejecucion":
             assert valor > 0
         else:
             assert valor is None
@@ -632,7 +632,7 @@ def test_limpiar_rendimiento(simulador):
     assert simulador.historial is not None
     assert simulador.red is not None
     for clave, valor in simulador.rendimiento.items():
-        if clave != "tiempo":
+        if clave != "tiempo_ejecucion":
             assert valor is None
         else:
             assert valor == pytest.approx(0, abs=1.0e-6)
@@ -640,9 +640,9 @@ def test_limpiar_rendimiento(simulador):
 def test_limpiar_todo(simulador):
     simulador.simular(5, medir_rendimiento=True, intervalo_rendimiento=1)
     for clave, valor in simulador.rendimiento.items():
-        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
+        if clave not in ("tiempo_ejecucion", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
             assert valor is not None
-        elif clave == "tiempo":
+        elif clave == "tiempo_ejecucion":
             assert valor > 0
         else:
             assert valor is None
@@ -653,7 +653,7 @@ def test_limpiar_todo(simulador):
     assert simulador.historial is None
     assert simulador.paso_actual == 0
     for clave, valor in simulador.rendimiento.items():
-        if clave != "tiempo":
+        if clave != "tiempo_ejecucion":
             assert valor is None
         else:
             assert valor == 0
@@ -674,9 +674,9 @@ def test_reiniciar():
     assert sim.historial is not None
     assert sim.paso_actual == 6
     for clave, valor in sim.rendimiento.items():
-        if clave not in ("tiempo", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
+        if clave not in ("tiempo_ejecucion", "gpu_media", "gpu_maxima", "vram_media", "vram_maxima"):
             assert valor is not None
-        elif clave == "tiempo":
+        elif clave == "tiempo_ejecucion":
             assert valor > 0
         else:
             assert valor is None
@@ -687,7 +687,7 @@ def test_reiniciar():
     assert sim.paso_actual == 0
     assert sim.red is not None
     for clave, valor in sim.rendimiento.items():
-        if clave != "tiempo":
+        if clave != "tiempo_ejecucion":
             assert valor is None
         else:
             assert valor == pytest.approx(0, abs=1.0e-6)
