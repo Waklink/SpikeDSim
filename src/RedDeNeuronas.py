@@ -1056,7 +1056,10 @@ class RedDeNeuronas:
             v[spikes_previos] = self.__c[spikes_previos]
             u[spikes_previos] += self.__d[spikes_previos]
 
-        I_total = self.__conexiones.dot(spikes_previos.astype(self.__dtype)) + I
+        if self.__num_conexiones == 0:
+            I_total = I
+        else:
+            I_total = self.__conexiones.dot(spikes_previos.astype(self.__dtype)) + I
 
         # Evitar posibles asignaciones intermedias de elevar al cuadrado haciendo la multiplicación
         # directamente
