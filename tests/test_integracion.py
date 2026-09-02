@@ -20,7 +20,7 @@ def red():
 @pytest.fixture
 def simulador_neurona(neurona):
     sim = Simulador()
-    sim.cargar_neurona(neurona)
+    sim.cargar_red(neurona)
     return sim
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def test_neurona_y_red_de_una_neurona_misma_evolucion():
     red = RedDeNeuronas({n.copy(): 1}, precision=64)
 
     sim_n = Simulador()
-    sim_n.cargar_neurona(n)
+    sim_n.cargar_red(n)
     sim_red = Simulador()
     sim_red.cargar_red(red)
 

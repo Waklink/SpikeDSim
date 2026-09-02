@@ -161,57 +161,31 @@ class Simulador:
     # MÉTODOS PÚBLICOS
     # --------------------------------------------------
 
-    def cargar_red(self, red: RedDeNeuronas) -> None:
+    def cargar_red(self, red: RedDeNeuronas | Neurona) -> None:
         """
-        Cargar una red de neuronas en el simulador.
+        Cargar una neurona o una red de neuronas en el simulador.
 
         Parameters
         ----------
-        red : RedDeNeuronas
-            Red a cargar.
+        red : RedDeNeuronas | Neurona
+            Neurona o Red a cargar.
 
         Raises
         ------
         TypeError
-            Si la red a cargar no es una instancia de RedDeNeuronas.
+            Si la neurona o red a cargar no es una instancia de Neurona o RedDeNeuronas.
 
         ValueError
-            Si ya hay otra red o una neurona cargada en el simulador.
+            Si ya hay otra red o neurona cargada en el simulador.
         """
-        if not isinstance(red, RedDeNeuronas):
-            raise TypeError("Solo se puede cargar una RedDeNeuronas con este método.")
+        if not isinstance(red, (Neurona, RedDeNeuronas)):
+            raise TypeError("Solo se puede cargar una Neurona o una RedDeNeuronas.")
 
         if self.__red is not None:
             raise ValueError("Ya hay una neurona o red cargada. Limpia el simulador primero.")
             
         self.__red = red
-        self.__num_neuronas = self.__red.num_neuronas
-
-    def cargar_neurona(self, neurona: Neurona) -> None:
-        """
-        Cargar una neurona en el simulador.
-
-        Parameters
-        ----------
-        neurona : Neurona
-            Neurona a cargar.
-
-        Raises
-        ------
-        TypeError
-            Si la neurona a cargar no es una instancia de Neurona.
-
-        ValueError
-            Si ya hay otra neurona o una red de neuronas cargada en el simulador.
-        """
-        if not isinstance(neurona, Neurona):
-            raise TypeError("Solo se puede cargar una Neurona con este método.")
-
-        if self.__red is not None:
-            raise ValueError("Ya hay una neurona o red cargada. Limpia el simulador primero.")
-
-        self.__red = neurona
-        self.__num_neuronas = 1
+        self.__num_neuronas = 1 if isinstance(red, Neurona) else self.__red.num_neuronas
 
     def configurar_simulacion(self, guardar_resultados: bool | None = None, path_guardado: str | None = None,
                               mostrar_progreso: bool | None = None, medir_rendimiento: bool | None = None,
@@ -452,10 +426,13 @@ class Simulador:
             nuevo_I[:paso_actual] = historial_I
             historial_I = nuevo_I
 
-        # 3. Guardar el estado inicial si estamos en el paso cero
+        # 3. Determinar si la red interna está usando GPU (CuPy) o CPU (NumPy)
+        red_usa_gpu = False if isinstance(red, Neurona) else red.uso_gpu
+
+        # 4. Guardar el estado inicial si estamos en el paso cero
         if paso_actual == 0:
             v_actual, u_actual = red._estado()
-            if red.uso_gpu:
+            if red_usa_gpu:
                 v_actual = v_actual.get()
                 u_actual = u_actual.get()
 
@@ -473,9 +450,6 @@ class Simulador:
                 self.__historial_I = historial_I
                 self.__paso_actual = paso_actual
                 return 0
-
-        # 4. Determinar si la red interna está usando GPU (CuPy) o CPU (NumPy)
-        red_usa_gpu = red.uso_gpu
 
         # Barra de progreso
         barra = None

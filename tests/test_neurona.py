@@ -31,7 +31,6 @@ def test_crear_neurona_personalizada():
     assert n.estado == (-50, -20)
     assert n.nombre == "Prueba"
     assert n.es_excitatoria is False
-    assert n.uso_gpu is False
 
 def test_u_inicial_calculado():
     n = Neurona(*PARAMETROS_BASICOS, v_inicial=-50)

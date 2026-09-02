@@ -531,20 +531,6 @@ class Neurona:
         """
         return self.__a, self.__b, self.__c, self.__d
 
-    @property
-    def uso_gpu(self) -> bool:
-        """
-        Indica si la neurona utiliza GPU como backend de cálculo.
-
-        Esta propiedad existe para mantener una interfaz homogénea con RedDeNeuronas.
-
-        Returns
-        -------
-        bool
-            False, ya que la simulación individual de una neurona se realiza en CPU.
-        """
-        return False
-
 
     # --------------------------------------------------
     # REPRESENTACIÓN

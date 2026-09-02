@@ -163,7 +163,7 @@ def test_cargar_red_con_neurona_cargada():
     red = RED.copy()
     neurona = N.copy()
     sim = Simulador()
-    sim.cargar_neurona(neurona)
+    sim.cargar_red(neurona)
     with pytest.raises(ValueError):
         sim.cargar_red(red)
 
@@ -173,7 +173,7 @@ def test_cargar_red_despues_de_limpiar_todo(simulador):
     simulador.cargar_red(RED.copy())
     assert simulador.red is not None
 
-@pytest.mark.parametrize("red", ["red", [RED.copy()], N.copy()])
+@pytest.mark.parametrize("red", ["red", [RED.copy()], [N.copy()]])
 def test_cargar_red_invalido(red):
     sim = Simulador()
     with pytest.raises(TypeError):
@@ -182,28 +182,22 @@ def test_cargar_red_invalido(red):
 def test_cargar_neurona():
     neurona = N.copy()
     sim = Simulador()
-    sim.cargar_neurona(neurona)
+    sim.cargar_red(neurona)
     assert sim.red is neurona
     assert sim.num_neuronas == 1
 
 def test_cargar_neurona_con_red_cargada(simulador):
     neurona = N.copy()
     with pytest.raises(ValueError):
-        simulador.cargar_neurona(neurona)
+        simulador.cargar_red(neurona)
 
 def test_cargar_neurona_con_neurona_cargada():
     neurona = N.copy()
     neurona2 = N.copy()
     sim = Simulador()
-    sim.cargar_neurona(neurona2)
+    sim.cargar_red(neurona2)
     with pytest.raises(ValueError):
-        sim.cargar_neurona(neurona)
-
-@pytest.mark.parametrize("neurona", ["neurona", RED.copy(), [N.copy()]])
-def test_cargar_neurona_invalido(neurona):
-    sim = Simulador()
-    with pytest.raises(TypeError):
-        sim.cargar_neurona(neurona)
+        sim.cargar_red(neurona)
 
 
 # ==================================================
@@ -302,7 +296,7 @@ def test_simular_varias_llamadas_continua_historial(simulador2):
 def test_simular_neurona_individual():
     neurona = N.copy()
     sim = Simulador()
-    sim.cargar_neurona(neurona)
+    sim.cargar_red(neurona)
     sim.simular(10)
     hist = sim.historial
 
