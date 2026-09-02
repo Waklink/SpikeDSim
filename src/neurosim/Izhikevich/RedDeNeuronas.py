@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import scipy.sparse as sp
 
-from typing import TYPE_CHECKING, TypeAlias, Literal, TypedDict
+from typing import TypeAlias, Literal, TypedDict
 from numbers import Real
 from collections.abc import Sequence
 
@@ -11,28 +11,17 @@ from collections.abc import Sequence
 from .Neurona import Neurona
 from ..backend import cp, cpsp, CUPY_DISPONIBLE
 
-if TYPE_CHECKING:
-    if CUPY_DISPONIBLE:
-        import cupy as cp
-        import cupyx.scipy.sparse as cpsp
-
-    Array: TypeAlias = np.ndarray | cp.ndarray
-    SparseArray: TypeAlias = sp.csr_matrix | cpsp.csr_matrix
-else:
-    if CUPY_DISPONIBLE:
-        import cupy as cp
-        import cupyx.scipy.sparse as cpsp
-    else:
-        cp = None
-        cpsp = None
-
-    Array: TypeAlias = np.ndarray
-    SparseMatrix: TypeAlias = sp.csr_matrix
-
 
 # --------------------------------------------------
 # TIPOS AUXILIARES
 # --------------------------------------------------
+
+if CUPY_DISPONIBLE:
+    Array: TypeAlias = np.ndarray | cp.ndarray
+    SparseArray: TypeAlias = sp.csr_matrix | cpsp.csr_matrix
+else:
+    Array: TypeAlias = np.ndarray
+    SparseArray: TypeAlias = sp.csr_matrix
 
 Vector4D: TypeAlias = tuple[float | None, float | None, float | None, float | None]
 
@@ -450,6 +439,11 @@ class RedDeNeuronas:
         -------
         RedDeNeuronas
             Una copia de la red actual con el nuevo backend especificado.
+
+        Raises
+        ------
+        ImportError
+            Si cupy no está instalado y se quiere cambiar de backend numpy a cupy.
         """
         nuevo_backend = backend.lower().strip()
         conexiones = 0
@@ -460,6 +454,8 @@ class RedDeNeuronas:
             # Backend actual CuPy a NumPy
             conexiones = self.__conexiones.get()
         elif nuevo_backend == "cupy":
+            if not CUPY_DISPONIBLE:
+                raise ImportError("cupy no está instalado.")
             # Backend actual NumPy a CuPy
             if self.__sparse:
                 conexiones = cpsp.csr_matrix(self.__conexiones)
@@ -1317,13 +1313,13 @@ class RedDeNeuronas:
         return self.__precision
 
     @property
-    def dtype(self) -> np.float32 | cp.float32 | np.float64 | cp.float64:
+    def dtype(self) -> np.float32 | np.float64 | cp.float32 | cp.float64:
         """
         Tipo de dato utilizado internamente por la red.
 
         Returns
         -------
-        type[np.floating] | type[cp.floating]
+        np.float32 | np.float64 | cp.float32 | cp.float64
             Tipo de dato interno utilizado por los arrays de la red (por ejemplo np.float32 o cp.float32).
         """
         return self.__dtype
