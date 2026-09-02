@@ -1,7 +1,5 @@
 import time
 import numpy as np
-import cupy as cp
-
 import psutil
 import pynvml
 
@@ -12,6 +10,7 @@ from tqdm import tqdm
 
 from .Neurona import Neurona
 from .RedDeNeuronas import RedDeNeuronas, Array
+from ..backend import cp, CUPY_DISPONIBLE
 
 
 class Simulador:
@@ -184,7 +183,7 @@ class Simulador:
 
         if self.__red is not None:
             raise ValueError("Ya hay una neurona o red cargada. Limpia el simulador primero.")
-
+            
         self.__red = red
         self.__num_neuronas = self.__red.num_neuronas
 
@@ -1041,7 +1040,7 @@ class Simulador:
         """
         if isinstance(I, Real):
             return float(I)
-        elif isinstance(I, cp.ndarray):
+        elif CUPY_DISPONIBLE and isinstance(I, cp.ndarray):
             I = I.get()
         elif isinstance(I, (list, np.ndarray)):
             I = np.asarray(I)

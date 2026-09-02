@@ -1,27 +1,9 @@
 import pytest
 import numpy as np
 
-try:
-    import cupy as cp
-    try:
-        cp.zeros(1)
-        CUPY_DISPONIBLE = True
-    except Exception:
-        CUPY_DISPONIBLE = False
-except ImportError:
-    cp = None
-    CUPY_DISPONIBLE = False
+from neurosim.Izhikevich import Neurona, RedDeNeuronas, Simulador
+from neurosim.backend import cp, CUPY_DISPONIBLE
 
-from src.Neurona import Neurona
-from src.RedDeNeuronas import RedDeNeuronas
-from src.Simulador import Simulador
-
-# Comprobar si hay cupy disponible
-try:
-    cp.zeros(1)
-    CUPY_DISPONIBLE = True
-except Exception:
-    CUPY_DISPONIBLE = False
 
 # ==================================================
 # FIXTURES

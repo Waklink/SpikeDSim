@@ -7,9 +7,9 @@ import json
 import matplotlib
 matplotlib.use("Agg")
 
-from src.RedDeNeuronas import RedDeNeuronas
-from src.Simulador import Simulador
-from src.Visualizar import Visualizar
+from neurosim.Izhikevich import RedDeNeuronas, Simulador
+from neurosim import Visualizar
+
 
 # Decidir si mantener los archivos temporales
 MANTENER_ARCHIVOS_TEMPORALES = False

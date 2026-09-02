@@ -1,19 +1,38 @@
-import cupy as cp
+from __future__ import annotations
+
 import numpy as np
 import scipy.sparse as sp
-import cupyx.scipy.sparse as cpsp
-from .Neurona import Neurona
-from typing import TypeAlias, Literal, TypedDict
+
+from typing import TYPE_CHECKING, TypeAlias, Literal, TypedDict
 from numbers import Real
 from collections.abc import Sequence
+
+
+from .Neurona import Neurona
+from ..backend import cp, cpsp, CUPY_DISPONIBLE
+
+if TYPE_CHECKING:
+    if CUPY_DISPONIBLE:
+        import cupy as cp
+        import cupyx.scipy.sparse as cpsp
+
+    Array: TypeAlias = np.ndarray | cp.ndarray
+    SparseArray: TypeAlias = sp.csr_matrix | cpsp.csr_matrix
+else:
+    if CUPY_DISPONIBLE:
+        import cupy as cp
+        import cupyx.scipy.sparse as cpsp
+    else:
+        cp = None
+        cpsp = None
+
+    Array: TypeAlias = np.ndarray
+    SparseMatrix: TypeAlias = sp.csr_matrix
 
 
 # --------------------------------------------------
 # TIPOS AUXILIARES
 # --------------------------------------------------
-
-Array: TypeAlias = np.ndarray | cp.ndarray
-SparseArray: TypeAlias = sp.csr_matrix | cpsp.csr_matrix
 
 Vector4D: TypeAlias = tuple[float | None, float | None, float | None, float | None]
 
@@ -321,7 +340,7 @@ class RedDeNeuronas:
 
             I_total = conexiones · spikes + I
         """
-        if isinstance(I, (np.ndarray, cp.ndarray)):
+        if isinstance(I, (np.ndarray, cp.ndarray) if CUPY_DISPONIBLE else (np.ndarray)):
             if I.shape != (self.__num_neuronas,):
                 raise ValueError("La entrada de corriente debe ser un vector de longitud N, donde N "
                                  "es el número total de neuronas, o ser un número a usar para aplicar"
@@ -387,7 +406,7 @@ class RedDeNeuronas:
             Si alguno de los vectores no tiene longitud igual a num_neuronas.
         """
         if v is not None:
-            if isinstance(v, (np.ndarray, cp.ndarray)):
+            if isinstance(v, (np.ndarray, cp.ndarray) if CUPY_DISPONIBLE else (np.ndarray)):
                 if v.shape != (self.__num_neuronas,):
                     raise ValueError("El vector de potenciales de membrana tiene que tener una longitud"
                                     f" de {self.__num_neuronas} elementos.")
@@ -402,7 +421,7 @@ class RedDeNeuronas:
             self.__v[:] = self.__xp.asarray(v, dtype=self.__dtype)
 
         if u is not None:
-            if isinstance(u, (np.ndarray, cp.ndarray)):
+            if isinstance(u, (np.ndarray, cp.ndarray) if CUPY_DISPONIBLE else (np.ndarray)):
                 if u.shape != (self.__num_neuronas,):
                     raise ValueError("El vector de variables de recuperación tiene que tener una longitud"
                                     f" de {self.__num_neuronas} elementos.")
@@ -589,6 +608,9 @@ class RedDeNeuronas:
         TypeError
             Si alguno de los parámetros pasados no son del tipo correcto.
 
+        ImportError
+            Si no se tiene instalado el paquete cupy y se quiere usarlo como backend.
+
         ValueError
             Si el backend o la precisión no son valores válidos.
         """
@@ -607,12 +629,8 @@ class RedDeNeuronas:
             self.__xp = np
             self.__sp = sp
         elif backend == "cupy":
-            try:
-                cp.zeros(1)
-            except Exception as e:
-                raise RuntimeError("Su equipo no puede realizar operaciones en la gpu, por favor "
-                                   "asegúrese de tener una tarjeta gráfica compatible con CuPy, y"
-                                   " de tener el driver adecuado instalado.") from e
+            if not CUPY_DISPONIBLE:
+                raise ImportError("El backend cupy requiere tener instalado el paquete de cupy.")
 
             self.__xp = cp
             self.__sp = cpsp

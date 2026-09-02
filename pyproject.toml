@@ -3,12 +3,13 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "simulador-izhikevich"
+name = "neurosim"
 version = "0.1.0"
-description = "Implementación en Python de un simulador basado en el modelo neuronal de Izhikevich."
+description = "Implementación en Python de un simulador de redes neuronales basado en modelos neuronales."
+readme = "README.md"
 authors = [{name = "Catalin Antonio Dinu"}]
 
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.4.6",
     "scipy>=1.17.1",
@@ -20,12 +21,12 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest==9.1.1"
+    "pytest>=9.1.1"
 ]
 
 gpu = [
-    "cupy-cuda12x==14.1.1"
+    "cupy-cuda12x>=14.1.1"
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]

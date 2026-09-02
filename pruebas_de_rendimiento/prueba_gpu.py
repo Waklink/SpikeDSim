@@ -1,10 +1,13 @@
 import numpy as np
 import psutil
 import os
-import cupy as cp
 
-from src.Neurona import Neurona
-from src.RedDeNeuronas import RedDeNeuronas
+from neurosim.Izhikevich import Neurona, RedDeNeuronas
+from neurosim.backend import cp, CUPY_DISPONIBLE
+
+if not CUPY_DISPONIBLE:
+    raise ImportError("cupy no instalado.")
+
 
 process = psutil.Process(os.getpid())
 

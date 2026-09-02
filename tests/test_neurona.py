@@ -1,5 +1,5 @@
 import pytest
-from src.Neurona import Neurona
+from neurosim.Izhikevich import Neurona
 
 # Parámetros básicos a usar en las pruebas al crear neuronas personalizadas.
 # Siguen el formato (a, b, c, d)

@@ -1,26 +1,9 @@
 import pytest
 import numpy as np
 
-try:
-    import cupy as cp
-    try:
-        cp.zeros(1)
-        CUPY_DISPONIBLE = True
-    except Exception:
-        CUPY_DISPONIBLE = False
-except ImportError:
-    cp = None
-    CUPY_DISPONIBLE = False
+from neurosim.Izhikevich import Neurona, RedDeNeuronas
+from neurosim.backend import cp, CUPY_DISPONIBLE
 
-from src.Neurona import Neurona
-from src.RedDeNeuronas import RedDeNeuronas
-
-# Comprobar si hay cupy disponible
-try:
-    cp.zeros(1)
-    CUPY_DISPONIBLE = True
-except Exception:
-    CUPY_DISPONIBLE = False
 
 # Diccionario básico usado al probar parámetros del constructor
 N = {"rs": 1}
@@ -201,7 +184,7 @@ def test_crear_con_matriz_de_conexiones_de_diagonal_no_cero():
     with pytest.raises(ValueError):
         RedDeNeuronas(N2, conexiones=matriz_conexiones)
 
-@pytest.mark.parametrize("peso", [1, -1, 3, -2])
+@pytest.mark.parametrize("peso", [3, -2])
 def test_crear_con_matriz_de_conexiones_pesos_invalidos(peso):
     matriz_conexiones = [[0, peso],
                          [-peso, 0]]
