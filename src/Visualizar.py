@@ -693,7 +693,7 @@ class Visualizar:
 
 
     def frecuencia_disparos(self, path: str | Path |None = None, historial: Historial | None = None,
-                           neuronas: int | slice | Sequence[int] | None = 0,
+                           neuronas: int | slice | Sequence[int] | None = None,
                            figsize: tuple[float, float] = (10, 6),
                            titulo: str = "Frecuencia de disparos",
                            max_etiquetas_leyenda: int = 10,
@@ -703,9 +703,6 @@ class Visualizar:
 
         La frecuencia de disparo se calcula como el número total de spikes dividido por la duración de la
         simulación, expresándose en Hz.
-
-        Cuando varias neuronas con el mismo nombre presentan exactamente el mismo historial de disparos
-        (o uno suficientemente parecido según la tolerancia), se representan mediante un único punto.
 
         Parameters
         ----------
