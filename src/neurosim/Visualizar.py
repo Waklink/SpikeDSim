@@ -10,7 +10,6 @@ from numbers import Real
 from collections.abc import Sequence
 
 
-
 # --------------------------------------------------
 # TIPO AUXILIAR
 # --------------------------------------------------
