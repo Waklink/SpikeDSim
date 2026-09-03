@@ -523,9 +523,6 @@ class Simulador:
                 for _ in range(pasos):
                     I_actual = I[(inicio_batch + indice_batch - 1) % long_I] if I_temporal else I
 
-                    if num_neuronas == 1 and I_temporal:
-                        I_actual = float(I_actual[0])
-
                     # Avanzar un paso en la simulación.
                     spikes_actual = red._actualizar(I_actual, dt)
 

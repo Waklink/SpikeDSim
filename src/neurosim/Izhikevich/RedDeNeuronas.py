@@ -277,7 +277,7 @@ class RedDeNeuronas:
         self.__aleat_conex = aleat_conex
 
         # Creación y llenado de la matriz de conexiones entre neuronas
-        self._crear_matriz_conexiones(conexiones, aleat_conex)
+        self._crear_matriz_conexiones(conexiones)
 
         # Comprobaciones de la matriz de conexiones
         self._validar_conexiones()
@@ -828,8 +828,7 @@ class RedDeNeuronas:
         self.__v_inicial = self.__v.copy()
         self.__u_inicial = self.__u.copy()
 
-    def _crear_matriz_conexiones(self, conexiones: int | list[list[float]] | Array | SparseArray,
-                                 aleat_conex: tuple[float, float] | None) -> None:
+    def _crear_matriz_conexiones(self, conexiones: int | list[list[float]] | Array | SparseArray) -> None:
         """
         Crear la matriz de conexiones, basándose en si es dispersa o no y si se proporciona una matriz
         completa o se quiere crear valores aleatorios.
@@ -839,11 +838,6 @@ class RedDeNeuronas:
         conexiones : int | list[list[float]] | Array | SparseArray
             El número de conexiones aleatorias a crear, o una matriz con las conexiones ya establecidas.
             En el caso de que sea un Array o un SparseArray, este tiene que ser del backend utilizado.
-
-        aleat_conex : tuple[float, float] | None
-            El valor máximo, o mínimo en el caso de neuronas inhibitorias, de los pesos de las conexiones,
-            solo se tiene en cuenta si conexiones es un entero, en este caso, se convertirá a (1, 1)
-            por defecto si se pasa None.
 
         Raises
         ------
@@ -855,19 +849,17 @@ class RedDeNeuronas:
         """
         # Matriz aleatoria con número de conexiones especificado
         if isinstance(conexiones, int):
-            if aleat_conex is None:
-                aleat_conex = (1, 1)
+            if self.__aleat_conex is None:
+                self.__aleat_conex = (1, 1)
 
-            if not isinstance(aleat_conex, tuple) or not all(isinstance(elem, Real) for elem in aleat_conex):
+            if not isinstance(self.__aleat_conex, tuple) or not all(isinstance(elem, Real) for elem in self.__aleat_conex):
                 raise TypeError("aleat_conex tiene que ser una tupla de números.")
 
-            if len(aleat_conex) != 2:
+            if len(self.__aleat_conex) != 2:
                 raise ValueError("aleat_conex tiene que tener dos elementos.")
 
-            if not all(0 < elem <= 1 for elem in aleat_conex):
+            if not all(0 < elem <= 1 for elem in self.__aleat_conex):
                 raise ValueError("Los elementos de aleat_conex tienen que estar en el intervalo (0, 1].")
-
-            self.__aleat_conex = aleat_conex
 
             self._crear_conexiones_aleatorias(conexiones)
 
