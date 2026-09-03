@@ -94,9 +94,9 @@ class Visualizar:
     -----
     - Todos los atributos devolverán None si no hay ningún historial cargado.
     - En el caso de que la red usada haya tenido solo una neurona, o de que se haya simulado una
-      sola neurona, entonces los historiales de spikes, v, u e I estarán aplanados a una sola dimensión,
+      sola neurona, entonces los historiales de disparos, v, u e I estarán aplanados a una sola dimensión,
       es decir, pasarán de tener una forma (pasos, num_neuronas) a (pasos,).
-    - Si algún parámetro habitual del historial no existe, esté valdrá None.
+    - Si algún parámetro habitual del historial no existe, este será None.
     """
 
     # --------------------------------------------------
@@ -133,7 +133,7 @@ class Visualizar:
                          ) -> None:
         """
         Carga un historial en la clase, sobreescribiendo el posible historial que ya estuviese cargado,
-        pudiendo cargarlo desde un archivo o desde un historial de Simulador.
+        pudiendo cargarlo desde un archivo o desde un historial con el formato usado por Simulador.
 
         Debe pasarse al menos un path o un historial, en el caso de que se pasen ambos, se cargará
         únicamente el historial.
@@ -145,7 +145,7 @@ class Visualizar:
             o relativo, o una instancia de la clase Path.
 
         historial : Historial | None, optional
-            Historial creado desde Simulador, en forma de diccionario con spikes, v, u e I y datos
+            Historial, en forma de diccionario con disparos, v, u e I y datos
             de nombre, es_excitatoria de las neuronas y dt de la simulación.
 
         Raises
@@ -169,7 +169,7 @@ class Visualizar:
         """
         Mostrar un raster plot de los disparos de la simulación.
 
-        Cada punto representa un spike de una neurona en un instante de tiempo.
+        Cada punto representa un disparo de una neurona en un instante de tiempo.
 
         Parameters
         ----------
@@ -229,7 +229,7 @@ class Visualizar:
             Si neuronas no es un int, un slice, una secuencia de índices o None.
 
         ValueError
-            Si no existe historial de spikes o se pasa separar_tipo=True y no existe datos de
+            Si no existe historial de disparos o se pasa separar_tipo=True y no existe datos de
             es_excitatoria.
 
         IndexError
@@ -258,7 +258,7 @@ class Visualizar:
         hist = self._obtener_historial(path, historial)
 
         if hist is None or hist.get("spikes") is None:
-            raise ValueError("No hay historial de spikes disponible.")
+            raise ValueError("No hay historial de disparos disponible.")
 
         spikes = hist["spikes"]
         dt = hist.get("dt") if hist.get("dt") is not None else 1.0
@@ -291,7 +291,7 @@ class Visualizar:
         ax.scatter(tiempos * dt, neuronas_plot, s=markersize, c=color, marker=".")
 
         ax.set_xlabel("Tiempo (ms)")
-        ax.set_ylabel("Número de neurona")
+        ax.set_ylabel("Neurona")
         ax.set_title(titulo)
         ax.set_xlim(0, spikes.shape[0] * dt)
 
@@ -578,7 +578,7 @@ class Visualizar:
 
 
     def espacio_fase(self, path: str | Path | None = None, historial: Historial | None = None,
-                     neuronas: int | slice | Sequence[int] | None = 0,
+                     neuronas: int | slice | Sequence[int] | None = 0, valor_spike: float = 30,
                      figsize: tuple[float, float] = (7, 7), titulo: str = "Espacio de fase",
                      max_etiquetas_leyenda: int = 10,
                      mostrar: bool = True, tolerancia_similitud: float = 0
@@ -610,6 +610,10 @@ class Visualizar:
             - Sequence[int]: secuencia de índices concretos (por ejemplo, una lista o una tupla).
 
             Por defecto se representa la neurona 0.
+
+        valor_spike : float
+            Valor que define cuándo se ha producido un spike. Usado para borrar valores superiores
+            y líneas que conectan puntos entre el spike y el valor del reinicio.
 
         figsize : tuple[float, float]
             Tamaño de la figura.
@@ -656,14 +660,15 @@ class Visualizar:
         v, indices, etiquetas = self._separar_neuronas(hist["v"], neuronas, hist.get("nombre"))
         u, _, _ = self._separar_neuronas(hist["u"], neuronas, hist.get("nombre"))
 
-        v, u, etiquetas = self._agrupar_neuronas_similares_dos_variables(v, u, indices, etiquetas, tolerancia_similitud)
+        v, u, etiquetas = self._agrupar_neuronas_similares_dos_variables(v, u, indices, etiquetas,
+                                                                         tolerancia_similitud)
 
         fig, ax = plt.subplots(figsize=figsize)
 
         for i, etiqueta in enumerate(etiquetas):
             v_plot = v[:, i].copy()
             u_plot = u[:, i].copy()
-            resets = np.where(v_plot[:-1] >= 30)[0]
+            resets = np.where(v_plot[:-1] >= valor_spike)[0]
 
             for r in resets:
                 v_plot[r + 1] = np.nan
@@ -701,8 +706,8 @@ class Visualizar:
         """
         Mostrar la frecuencia de disparos de una o varias neuronas.
 
-        La frecuencia de disparo se calcula como el número total de spikes dividido por la duración de la
-        simulación, expresándose en Hz.
+        La frecuencia de disparo se calcula como el número total de disparos dividido por la duración
+        de la simulación, expresándose en disparos por s (Hz).
 
         Parameters
         ----------
@@ -723,7 +728,7 @@ class Visualizar:
             - slice: rango de neuronas.
             - Sequence[int]: secuencia de índices concretos (por ejemplo, una lista o una tupla).
 
-            Por defecto se representa la neurona 0.
+            Por defecto es None.
 
         figsize : tuple[float, float]
             Tamaño de la figura.
@@ -746,7 +751,7 @@ class Visualizar:
         Raises
         ------
         ValueError
-            Si no existe historial de spikes.
+            Si no existe historial de disparos.
 
         TypeError
             Si neuronas no es un int, un slice, una secuencia de índices o None.
@@ -761,7 +766,7 @@ class Visualizar:
         hist = self._obtener_historial(path, historial)
 
         if hist is None or hist.get("spikes") is None:
-            raise ValueError("No hay historial de spikes disponible.")
+            raise ValueError("No hay historial de disparos disponible.")
 
         spikes = hist["spikes"]
         dt = hist.get("dt") if hist.get("dt") is not None else 1.0
@@ -826,7 +831,7 @@ class Visualizar:
             o relativo, o una instancia de la clase Path.
 
         historial : Historial | None, optional
-            Historial creado desde Simulador, en forma de diccionario con spikes, v, u e I y datos
+            Historial, en forma de diccionario con disparos, v, u e I y datos
             de nombre y es_excitatoria de las neuronas y dt de la simulación.
 
         Returns
@@ -849,7 +854,7 @@ class Visualizar:
         Parameters
         ----------
         historial : Historial | None
-            Historial de un Simulador.
+            Historial con el formato usaodo por Simulador.
 
         Returns
         -------
@@ -860,9 +865,6 @@ class Visualizar:
         ------
         TypeError
             Si el historial pasado no es un diccionario.
-
-        ValueError
-            Si el diccionario no tiene todas las claves necesarias.
         """
         if not isinstance(historial, dict):
             raise TypeError("Pase un diccionario como historial.")
@@ -899,8 +901,7 @@ class Visualizar:
             Si el archivo es de formato JSON y no contiene ningún diccionario.
         """
         if not isinstance(path, (str, Path)):
-            raise TypeError("El path pasado debe ser una cadena con el path, o una instancia de la "
-                            "clase Path")
+            raise TypeError("El path pasado debe ser una cadena de texto o una instancia de la clase Path")
 
         path = Path(path)
         formato = path.suffix.lower().replace(".", "")
@@ -1019,7 +1020,7 @@ class Visualizar:
 
     def _normalizar_historial(self, hist: Historial | None) -> Historial | None:
         """
-        Normalizar el historial pasado, en el caso de que no tenga ninguna de las claves necesarias,
+        Normalizar el historial pasado, en el caso de que no tenga ninguna de las claves esperadas,
         o todas sean None, se guardará el historial como None. Asimismo, si alguna de las claves no
         existe, o su valor es None, se guardará con el valor None.
 
@@ -1045,7 +1046,7 @@ class Visualizar:
         Raises
         ------
         TypeError
-            Si el historial pasado no es un diccionario, o alguno de los valores no sea adecuado.
+            Si el historial pasado no es un diccionario, o alguno de los valores no es adecuado.
         """
         if not isinstance(hist, dict):
             raise TypeError("El historial pasado debe ser un diccionario.")
@@ -1093,6 +1094,9 @@ class Visualizar:
             if not all(isinstance(elem, bool) or (isinstance(elem, int) and elem in (0, 1)) for elem in es_excitatoria):
                 raise TypeError("La lista de es_excitatoria tiene que contener solo booleanos.")
 
+            if any(isinstance(elem, int) for elem in es_excitatoria):
+                es_excitatoria = [bool(elem) for elem in es_excitatoria]
+
             if num_neuronas is not None and num_neuronas != len(es_excitatoria):
                 raise ValueError("La longitud de es_excitatoria debe coincidir con el número de "
                                  "neuronas con las que se haya realizado la simulación.")
@@ -1100,7 +1104,7 @@ class Visualizar:
         dt = hist.get("dt")
         if dt is not None:
             dt = float(dt)
-            if dt <= 0:
+            if not np.isfinite(dt) or dt <= 0:
                 raise ValueError("El paso temporal debe ser mayor que 0.")
 
         if all(valor is None for valor in (spikes, v, u, i, nombre, es_excitatoria, dt)):
@@ -1137,10 +1141,9 @@ class Visualizar:
         Raises
         ------
         ValueError
-            Si el dato pasado no es un vector ni una matriz de dos dimensiones.
-
-            En el caso de que se pase un shape distinto de None, si el dato pasado no tiene la forma
-            correcta.
+            - Si el dato pasado no es un vector ni una matriz de dos dimensiones.
+            - Si se pasa un shape distinto de None y el dato pasado no tiene la forma
+              correcta.
         """
         if dato is None:
             return None, shape
@@ -1155,7 +1158,7 @@ class Visualizar:
             return dato, dato.shape
 
         if dato.shape != shape:
-            raise ValueError("Los historiales de spikes, v, u e I deben tener la misma forma.")
+            raise ValueError("Los historiales de disparos, v, u e I deben tener la misma forma.")
 
         return dato, shape
 
@@ -1195,8 +1198,8 @@ class Visualizar:
             Número máximo de etiquetas a partir del cual no se muestra la leyenda.
 
         mostrar : bool
-            Si True, se muestra la figura mediante matplotlib.pyplot.show().
-            Si False, se cierra la figura sin mostrarla.
+            Si True, se muestra la figura mediante matplotlib.pyplot.show(). Si False, se cierra la
+            figura sin mostrarla.
 
         Returns
         -------
@@ -1231,14 +1234,14 @@ class Visualizar:
     # Selección y agrupación de neuronas
     # --------------------------------------------------
 
-    def _obtener_indices_neuronas(self, neuronas: int | slice | Sequence[int] | None,
+    def _obtener_indices_neuronas(self, neuronas: int | slice | Sequence[int] | np.ndarray | None,
                                    num_neuronas: int) -> np.ndarray:
         """
         Obtener los índices de las neuronas que se desean representar.
 
         Parameters
         ----------
-        neuronas : int | slice | Sequence[int] | None
+        neuronas : int | slice | Sequence[int] | np.ndarray | None
             Neurona o conjunto de neuronas seleccionado.
             - None: todas las neuronas.
             - int: una única neurona.
@@ -1269,7 +1272,7 @@ class Visualizar:
         elif isinstance(neuronas, slice):
             indices = np.arange(num_neuronas)[neuronas]
         elif isinstance(neuronas, (Sequence, np.ndarray)) and not isinstance(neuronas, (str, bytes)):
-            if not all(isinstance(n, int) for n in neuronas):
+            if not all(isinstance(n, (int, np.integer)) for n in neuronas):
                 raise TypeError("Los índices deben ser enteros.")
 
             if len(neuronas) == 0:
@@ -1289,9 +1292,8 @@ class Visualizar:
         """
         Separar los datos de las neuronas seleccionadas.
 
-        Convierte un historial de una única neurona con forma (pasos,) a una matriz
-        con forma (pasos, 1), obtiene los índices seleccionados y devuelve los datos
-        correspondientes junto con sus etiquetas.
+        Convierte un historial de una única neurona con forma (pasos,) a una matriz con forma (pasos, 1),
+        obtiene los índices seleccionados y devuelve los datos correspondientes junto con sus etiquetas.
 
         Parameters
         ----------
@@ -1341,8 +1343,7 @@ class Visualizar:
     def _separar_raster_por_tipo(self, indices: np.ndarray, es_excitatoria: list[bool]
                                  ) -> tuple[np.ndarray, float | None, dict[str, float]]:
         """
-        Reordenar posiciones verticales del raster separando neuronas
-        excitatorias e inhibitorias.
+        Reordenar posiciones verticales del raster separando neuronas excitatorias e inhibitorias.
 
         Las inhibitorias se colocan arriba y las excitatorias abajo.
 
@@ -1394,7 +1395,8 @@ class Visualizar:
             Etiquetas originales de las neuronas.
 
         tolerancia : float
-            Diferencia media absoluta máxima para considerar dos neuronas iguales.
+            Diferencia media absoluta máxima para considerar dos neuronas iguales. Si es 0, se necesita
+            igualdad exacta. Si es menor que 0, no se agrupan neuronas.
 
         Returns
         -------
@@ -1596,7 +1598,7 @@ class Visualizar:
         Returns
         -------
         np.ndarray | list[str] | list[bool] | float | None
-            Valor de una clave del historial, puede ser un array de numpy, para spikes, v, u o I,
+            Valor de una clave del historial, puede ser un array de NumPy, para disparos, v, u o I,
             una lista de nombres, o de booleanos para es_excitatoria, un float para dt o None si no
             tienen valor o no hay ningún historial cargado.
         """

@@ -222,10 +222,10 @@ class Neurona:
         --------
         >>> n = Neurona.predefinida("RS")
         >>> n.nombre
-        "Regular Spiking"
+        'Regular Spiking'
         >>> n2 = Neurona.predefinida("regular spiking")
         >>> n2.nombre
-        "Regular Spiking"
+        'Regular Spiking'
         """
         if not isinstance(tipo, str):
             raise TypeError("El tipo de neurona debe ser una cadena de texto.")
@@ -238,8 +238,8 @@ class Neurona:
         tipo = tipo.strip().lower()
 
         if tipo not in cls._ALIAS:
-            raise ValueError(f"El tipo de neurona '{tipo}' no existe. Use un valor predefinido o cree"
-                             " una neurona personalizada con el constructor.")
+            raise ValueError(f"El tipo de neurona '{tipo}' no es válido. Use un valor predefinido "
+                             "o cree una neurona personalizada con el constructor.")
 
         tipo = cls._ALIAS[tipo]
         datos = cls._TIPOS[tipo]
@@ -340,12 +340,15 @@ class Neurona:
         Neurona
             Copia de la instancia de neurona actual, con los mismos parámetros, estado y nombre.
         """
-        return Neurona(self.__a, self.__b, self.__c, self.__d, self.__v, self.__u, self.__nombre,
-                       self.__es_excitatoria)
+        n = Neurona(self.__a, self.__b, self.__c, self.__d, self.__v_inicial, self.__u_inicial,
+                    self.__nombre, self.__es_excitatoria)
+
+        n.establecer_estado(self.__v, self.__u)
+        return n
 
 
     # --------------------------------------------------
-    # MÈTODOS DE CLASE
+    # MÉTODOS DE CLASE
     # --------------------------------------------------
 
     @classmethod
@@ -392,7 +395,7 @@ class Neurona:
     # --------------------------------------------------
 
     @classmethod
-    def _validar_numero_real(self, valor: object, nombre: str, mensaje: str | None = None) -> None:
+    def _validar_numero_real(cls, valor: object, nombre: str, mensaje: str | None = None) -> None:
         """
         Comprueba que un valor sea un número real.
 
@@ -538,7 +541,7 @@ class Neurona:
 
     def __repr__(self) -> str:
         """
-        Devuelve una representación informal de la neurona.
+        Devuelve una representación de la neurona.
 
         Returns
         -------

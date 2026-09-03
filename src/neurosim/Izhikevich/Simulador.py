@@ -33,7 +33,7 @@ class Simulador:
         Índice del próximo paso a simular.
 
     historial : dict[str, np.ndarray | list[str] | list[bool] | float] | None
-        Historial de spikes, variables de estado (v y u) y corriente de entrada en cada paso, siendo
+        Historial de disparos, variables de estado (v y u) y corriente de entrada en cada paso, siendo
         estos None si aún no se ha ejecutado ninguna simulación. Además, también contiene información
         adicional para facilitar la interpretación de los datos, como una lista ordenada de los nombres
         de las neuronas cargadas, si son excitatorias o inhibitorias y el paso temporal de la simulación.
@@ -46,7 +46,7 @@ class Simulador:
 
     Notes
     -----
-    Internamente se almacenan buffers separados para spikes, v y u en memoria CPU para evitar saturación
+    Internamente se almacenan buffers separados para disparos, v y u en memoria CPU para evitar saturación
     de VRAM en ejecuciones con backend GPU, almacenándose buffers temporales de menor tamaño para
     agrupar transferencias.
 
@@ -56,7 +56,8 @@ class Simulador:
     Las corrientes de entrada pueden proporcionarse como:
     - Un escalar, aplicándose la misma corriente a todas las neuronas durante toda la simulación.
     - Un vector de longitud N, aplicando una corriente fija a cada neurona.
-    - Una matriz de dimensiones (M, N), donde cada fila representa la corriente aplicada en un paso temporal.
+    - Una matriz de dimensiones (M, N), donde cada fila representa la corriente aplicada en un paso
+      temporal.
     Si M es menor que el número de pasos simulados, la matriz se recorre cíclicamente.
 
     En el caso de una única neurona, un vector de longitud M se interpreta como una corriente variable
@@ -87,8 +88,8 @@ class Simulador:
             El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
 
         mostrar_progreso : bool, optional
-            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
-            reduce el rendimiento de la simulación.
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si
+            True, reduce el rendimiento de la simulación.
 
         medir_rendimiento : bool, optional
             Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
@@ -99,8 +100,8 @@ class Simulador:
             rendimiento de la simulación.
 
         tamano_batch : int, optional
-            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
-            afecta si la red cargada tiene de backend cupy.
+            Tamaño del batch que se guardan en la GPU antes de transferirse a la memoria RAM.
+            Solo afecta si la red cargada tiene de backend CuPy.
 
         Raises
         ------
@@ -202,8 +203,8 @@ class Simulador:
             El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
 
         mostrar_progreso : bool | None, optional
-            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
-            reduce el rendimiento de la simulación.
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si
+            True, reduce el rendimiento de la simulación.
 
         medir_rendimiento : bool | None, optional
             Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
@@ -214,8 +215,8 @@ class Simulador:
             rendimiento de la simulación.
 
         tamano_batch : int | None, optional
-            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
-            afecta si la red cargada tiene de backend cupy.
+            Tamaño del batch que se guardan en la GPU antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend CuPy.
         """
         config = {"guardar_resultados": self.__guardar_resultados,
                   "path_guardado": self.__path_guardado,
@@ -259,10 +260,10 @@ class Simulador:
         ----------
         pasos : int
             Número de pasos a simular. En el caso de ser 0, si no hay nada guardado en el historial,
-            se guardará el estado actual como estado inicial, si ya hay estados guardados en el historial,
-            no se guardará nada.
+            se guardará el estado actual como estado inicial, si ya hay estados guardados en el
+            historial, no se guardará nada.
 
-        I : float | list[float] | Array, optional
+        I : float | list[float] | list[list[float]] | Array, optional
             Corriente de entrada para las neuronas. Por defecto, no se aplica corriente a las neuronas.
 
             Puede proporcionarse como:
@@ -289,8 +290,8 @@ class Simulador:
             El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
 
         mostrar_progreso : bool | None, optional
-            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
-            reduce el rendimiento de la simulación.
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si
+            True, reduce el rendimiento de la simulación.
 
         medir_rendimiento : bool | None, optional
             Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
@@ -301,8 +302,8 @@ class Simulador:
             rendimiento de la simulación.
 
         tamano_batch : int | None, optional
-            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
-            afecta si la red cargada tiene de backend cupy.
+            Tamaño del batch que se guardan en la GPU antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend CuPy.
 
         Returns
         -------
@@ -343,7 +344,7 @@ class Simulador:
         temporalmente:
 
         >>> simulador.limpiar_todo()
-        >>> simulador.cargar_neurona(Neurona.predefinida("rs"))
+        >>> simulador.cargar_red(Neurona.predefinida("rs"))
         >>> corriente = [5, 10, 15, 20]
         >>> simulador.simular(4, I=corriente)
         """
@@ -371,7 +372,7 @@ class Simulador:
             raise TypeError("Los pasos deben ser un entero.")
 
         if pasos < 0:
-            raise ValueError("Los pasos a simular deben ser un entero mayor o igual a 0.")
+            raise ValueError("Los pasos a simular deben ser mayores o iguales que 0.")
 
 
         # Reiniciar las métricas de rendimiento
@@ -396,8 +397,8 @@ class Simulador:
         if nuevo_tamano == 0:
             nuevo_tamano = 1
 
-        # Si se empieza desde paso actual = 0, y se queire simular algo, sumar 1 al tamaño para que
-        # quepa el estado inicial también
+        # Si se empieza desde paso actual = 0, y se quiere simular algo, sumar 1 al tamaño para que
+        # también quepa el estado inicial
         if paso_actual == 0 and pasos > 0:
             nuevo_tamano += 1
 
@@ -554,10 +555,9 @@ class Simulador:
 
                     if medir_rendimiento and ((inicio_batch + indice_batch) % intervalo_rendimiento == 0):
                         (muestras, cpu_suma, cpu_max, ram_suma, ram_max, gpu_suma, gpu_max, vram_suma,
-                         vram_max) = self._actualizar_rendimiento(barra, process, gpu_handle, red_usa_gpu,
-                                                                  muestras, cpu_suma, cpu_max, ram_suma,
-                                                                  ram_max, gpu_suma, gpu_max, vram_suma,
-                                                                  vram_max)
+                        vram_max) = self._actualizar_rendimiento(barra, process, gpu_handle, red_usa_gpu,
+                            muestras, cpu_suma, cpu_max, ram_suma, ram_max, gpu_suma, gpu_max, vram_suma,
+                            vram_max)
 
                 # Si queda un último batch incompleto, copiarlo.
                 if indice_batch > 0:
@@ -593,10 +593,9 @@ class Simulador:
 
                     if medir_rendimiento and (paso_actual % intervalo_rendimiento == 0):
                         (muestras, cpu_suma, cpu_max, ram_suma, ram_max, gpu_suma, gpu_max, vram_suma,
-                         vram_max) = self._actualizar_rendimiento(barra, process, gpu_handle, red_usa_gpu,
-                                                                  muestras, cpu_suma, cpu_max, ram_suma,
-                                                                  ram_max, gpu_suma, gpu_max, vram_suma,
-                                                                  vram_max)
+                        vram_max) = self._actualizar_rendimiento(barra, process, gpu_handle, red_usa_gpu,
+                            muestras, cpu_suma, cpu_max, ram_suma, ram_max, gpu_suma, gpu_max, vram_suma,
+                            vram_max)
 
             if red_usa_gpu:
                 cp.cuda.Stream.null.synchronize()
@@ -644,8 +643,8 @@ class Simulador:
 
     def limpiar_todo(self) -> None:
         """
-        Eliminar la red o neurona cargada del simulador, así como los historiales y los valores de rendimiento
-        almacenados.
+        Eliminar la red o neurona cargada del simulador, así como los historiales y los valores de
+        rendimiento almacenados.
         """
         if self.__red is not None:
             self.__red = None
@@ -655,8 +654,8 @@ class Simulador:
 
     def limpiar_historial(self) -> None:
         """
-        Eliminar el historial del estado y los disparos de las neuronas a lo largo del tiempo, reiniciando
-        el paso actual a 0.
+        Eliminar el historial del estado y los disparos de las neuronas a lo largo del tiempo,
+        reiniciando el paso actual a 0.
         """
         self.__historial_spikes = None
         self.__historial_v = None
@@ -717,10 +716,12 @@ class Simulador:
         formato : Literal["npz", "txt", "json", "csv"] | None, optional
             El formato elegido para guardar los datos. Si es None, se inferirá de la extensión del
             path. Los formatos soportados son:
-                - "npz" : (Recomendado) Formato binario comprimido de NumPy/CuPy. Guardando un solo archivo.
+                - "npz" : (Recomendado) Formato binario comprimido de NumPy/CuPy. Guardando un solo
+                          archivo.
                 - "json" : Formato de texto estructurado. Los arrays se convertirán automáticamente
                            a listas. Guardando un solo archivo.
-                - "csv" : Valores separados por comas. Guardando un archivo para cada historial y metadato.
+                - "csv" : Valores separados por comas. Guardando un archivo para cada historial y
+                          metadato.
                 - "txt" : Texto en plano. Guardando un archivo para cada historial y metadato.
 
         Notes
@@ -779,8 +780,8 @@ class Simulador:
 
         # Exportar según el formato
         if formato == "npz":
-            np.savez_compressed(filepath, spikes=spikes_data, v=v_data, u=u_data, I=I_data, nombre=nombres,
-                                es_excitatoria=excitatorias, dt=paso_temporal)
+            np.savez_compressed(filepath, spikes=spikes_data, v=v_data, u=u_data, I=I_data,
+                                nombre=nombres, es_excitatoria=excitatorias, dt=paso_temporal)
             
             print(f"Historiales guardados exitosamente en: {filepath}")
 
@@ -841,8 +842,8 @@ class Simulador:
             El path por defecto donde guardar los resultados en el caso de que se decida guardarlos.
 
         mostrar_progreso : bool
-            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si True,
-            reduce el rendimiento de la simulación.
+            Decidir si mostrar el progreso de la simulación en forma de una barra de progreso, si
+            True, reduce el rendimiento de la simulación.
 
         medir_rendimiento : bool
             Decidir si medir el rendimiento durante la simulación, si True, reduce el rendimiento
@@ -853,8 +854,8 @@ class Simulador:
             rendimiento de la simulación.
 
         tamano_batch : int
-            Tamaño de los batches que se guardan en la gpu antes de transferirse a memoria. Solo
-            afecta si la red cargada tiene de backend cupy.
+            Tamaño del batch que se guardan en la GPU antes de transferirse a memoria. Solo
+            afecta si la red cargada tiene de backend CuPy.
         
         Raises
         ------
@@ -862,14 +863,15 @@ class Simulador:
             Si alguno de los parámetros no es del tipo de dato correcto.
         
         ValueError
-            Si el intervalo de medir rendimiento o el tamaño de batches en gpu tienen un valor menor o igual que 0.
+            Si el intervalo de medir rendimiento o el tamaño de batch en GPU tienen un valor menor
+            o igual que 0.
         """
         if not isinstance(guardar_resultados, bool):
             raise TypeError("guardar_resultados debe ser un booleano.")
 
         if not isinstance(path_guardado, str):
             raise TypeError("path_guardado debe ser una cadena de texto con el path por defecto donde"
-                            " guardar los resultados ")
+                            " guardar los resultados.")
 
         if not isinstance(mostrar_progreso, bool):
             raise TypeError("mostrar_progreso debe ser un booleano.")
@@ -881,13 +883,13 @@ class Simulador:
             raise TypeError("El intervalo de recogida de valores de rendimiento debe ser un entero.")
         
         if intervalo_rendimiento <= 0:
-            raise ValueError("El intervalo de recogida de valores de rendimientos debe ser positivo.")
+            raise ValueError("El intervalo de recogida de valores de rendimiento debe ser mayor que 0.")
 
         if not isinstance(tamano_batch, int):
-            raise TypeError("El tamaño del batch de gpu debe ser un entero.")
+            raise TypeError("El tamaño del batch de GPU debe ser un entero.")
         
         if tamano_batch <= 0:
-            raise ValueError("El tamaño del batch debe ser un entero positivo.")
+            raise ValueError("El tamaño del batch de GPU debe ser un entero mayor que 0.")
 
     def _actualizar_rendimiento(self, barra: tqdm | None, process: psutil.Process,
                                  gpu_handle: Any | None, red_usa_gpu: bool,
@@ -898,26 +900,25 @@ class Simulador:
         """
         Actualizar los acumuladores de rendimiento durante una simulación.
 
-        Recoge una nueva muestra del consumo actual de CPU y memoria RAM.
-        En caso de utilizar GPU mediante CuPy, también recoge el uso de GPU
-        y memoria VRAM utilizada.
+        Recoge una nueva muestra del consumo actual de CPU y memoria RAM. En caso de utilizar GPU
+        mediante CuPy, también recoge el uso de GPU y memoria VRAM utilizada.
 
-        El método no almacena las muestras individuales, sino que actualiza
-        acumuladores de suma, máximo y número de muestras para permitir el
-        cálculo posterior de medias sin consumir memoria adicional.
+        El método no almacena las muestras individuales, sino que actualiza acumuladores de suma,
+        máximo y número de muestras para permitir el cálculo posterior de medias sin consumir memoria
+        adicional.
 
         Parameters
         ----------
         barra : tqdm | None
-            Barra de progreso asociada a la simulación.
-            Si no es None, se actualiza mostrando los valores actuales.
+            Barra de progreso asociada a la simulación. Si no es None, se actualiza mostrando los
+            valores actuales.
 
         process : psutil.Process
             Proceso cuyo consumo de memoria será medido.
 
         gpu_handle : Any | None
-            Identificador del dispositivo GPU proporcionado por NVML.
-            Puede ser None si no se utiliza GPU.
+            Identificador del dispositivo GPU proporcionado por NVML. Puede ser None si no se utiliza
+            GPU.
 
         red_usa_gpu : bool
             Indica si la simulación utiliza backend GPU mediante CuPy.
@@ -932,10 +933,10 @@ class Simulador:
             Máximo uso de CPU registrado.
 
         ram_suma : float
-            Acumulador del uso total de memoria RAM en MB.
+            Acumulador del uso total de memoria RAM, en MB.
 
         ram_max : float
-            Máximo consumo de RAM registrado en MB.
+            Máximo consumo de RAM registrada, en MB.
 
         gpu_suma : float
             Acumulador del uso total de GPU.
@@ -944,10 +945,10 @@ class Simulador:
             Máximo uso de GPU registrado.
 
         vram_suma : float
-            Acumulador del uso total de VRAM en MB.
+            Acumulador del uso total de VRAM, en MB.
 
         vram_max : float
-            Máximo consumo de VRAM registrado en MB.
+            Máximo consumo de VRAM registrada, en MB.
 
         Returns
         -------
@@ -986,7 +987,7 @@ class Simulador:
 
     def _convertir_I(self, I: float | list[float] | list[list[float]] | Array) -> float | np.ndarray:
         """
-        Convierte la corriente pasada a un vector de numpy de longitud num_neuronas.
+        Convierte la corriente pasada a un escalar o un array de NumPy.
 
         Parameters
         ----------
@@ -1000,7 +1001,7 @@ class Simulador:
         Returns
         -------
         float | np.ndarray
-            Corriente de entrada convertida a un escalar o un array de numpy.
+            Corriente de entrada convertida a un escalar o un array de NumPy.
 
         Raises
         ------
@@ -1058,7 +1059,7 @@ class Simulador:
         Returns
         -------
         dict[str, np.ndarray | list[str] | list[bool] | float] | None
-            Diccionario con los historiales de spikes, v, u e I, y las listas de nombres de las neuronas
+            Diccionario con los historiales de disparos, v, u e I, y las listas de nombres de las neuronas
             cargadas y si son excitatorias o inhibitorias, y el paso temporal, dt, de la simulación.
         """
         if self.__historial_spikes is None or self.__historial_v is None or self.__historial_u is None:
@@ -1104,16 +1105,15 @@ class Simulador:
     @property
     def paso_actual(self) -> int:
         """
-        Paso actual de la simulación, desde el último reinicio.
+        Índice del próximo paso a simular.
         """
         return self.__paso_actual
 
     @property
     def num_neuronas(self) -> int:
         """
-        Número de neuronas cargadas en el simulador.
-        Vale 1 en el caso de una sola neurona, y el valor de num_neuronas de la red de neuronas en
-        otro caso.
+        Número de neuronas cargadas en el simulador. Vale 1 en el caso de una sola neurona, y el
+        valor de num_neuronas de la red de neuronas en otro caso.
         """
         return self.__num_neuronas
 
@@ -1127,8 +1127,8 @@ class Simulador:
         Returns
         -------
         dict[str, np.ndarray | list[str] | list[bool] | float] | None
-            Diccionario con los historiales almacenados en memoria, o None si no se ha simulado
-            nada y no están inicializados.
+            Diccionario con los historiales almacenados en memoria, o None si no se ha simulado nada
+            y no están inicializados.
         """
         historial = self._obtener_historial_completo()
         if historial is None:
@@ -1160,7 +1160,7 @@ class Simulador:
         - vram_media (MB)
         - vram_maxima (MB)
 
-        Representan el tiempo de ejecución, y los valores de uso de recursos como cpu, memoria ram,
+        Representan el tiempo de ejecución, y los valores de uso de recursos como CPU, memoria RAM,
         etc. medios y máximos de la última simulación.
 
         Returns

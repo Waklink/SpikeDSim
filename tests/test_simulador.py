@@ -64,6 +64,14 @@ def test_crear_simulador():
         else:
             assert valor == 0
 
+    config = sim.configuracion
+    assert config["guardar_resultados"] is False
+    assert config["path_guardado"] == "./historial.npz"
+    assert config["mostrar_progreso"] is False
+    assert config["medir_rendimiento"] is False
+    assert config["intervalo_rendimiento"] == 100
+    assert config["tamano_batch"] == 100
+
 @pytest.mark.parametrize("dt", ["0.5", [0.5], None])
 def test_crear_simulador_dt_no_real(dt):
     with pytest.raises(TypeError):
@@ -73,16 +81,6 @@ def test_crear_simulador_dt_no_real(dt):
 def test_crear_simulador_dt_invalido(dt):
     with pytest.raises(ValueError):
         Simulador(dt)
-
-def test_crear_con_configuracion_por_defecto():
-    sim = Simulador()
-    config = sim.configuracion
-    assert config["guardar_resultados"] is False
-    assert config["path_guardado"] == "./historial.npz"
-    assert config["mostrar_progreso"] is False
-    assert config["medir_rendimiento"] is False
-    assert config["intervalo_rendimiento"] == 100
-    assert config["tamano_batch"] == 100
 
 def test_crear_con_configuracion_personalizada():
     sim = Simulador(mostrar_progreso=True, medir_rendimiento=True, intervalo_rendimiento=1, tamano_batch=10)
@@ -99,16 +97,15 @@ def test_crear_con_configuracion_personalizada():
 # TESTS DE CONFIGURAR SIMULACIÓN
 # ==================================================
 
-def test_configurar_simulacion_parcial():
+@pytest.mark.parametrize("parametro, valor", [("guardar_resultados", False), ("path_guardado", "./prueba.npz"),
+                                              ("mostrar_progreso", True), ("medir_rendimiento", True),
+                                              ("intervalo_rendimiento", 10), ("tamano_batch", 10)])
+def test_configurar_simulacion_parcial(parametro, valor):
+    parametros = {parametro: valor}
     sim = Simulador()
-    sim.configurar_simulacion(mostrar_progreso=True)
+    sim.configurar_simulacion(**parametros)
     config = sim.configuracion
-    assert config["guardar_resultados"] is False
-    assert config["path_guardado"] == "./historial.npz"
-    assert config["mostrar_progreso"] is True
-    assert config["medir_rendimiento"] is False
-    assert config["intervalo_rendimiento"] == 100
-    assert config["tamano_batch"] == 100
+    assert config[parametro] == valor
 
 def test_configurar_simulacion_completa():
     sim = Simulador()
@@ -141,6 +138,23 @@ def test_configurar_simulacion_enteros_no_positivos(parametro, valor):
     sim = Simulador()
     with pytest.raises(ValueError):
         sim.configurar_simulacion(**{parametro: valor})
+
+@pytest.mark.parametrize("path", [123, 3.14, True, [], {}])
+def test_configurar_simulacion_path_guardado_invalido(simulador, path):
+    with pytest.raises(TypeError):
+        simulador.configurar_simulacion(path_guardado=path)
+
+
+@pytest.mark.parametrize("valor", [0, -1, -100])
+def test_configurar_simulacion_tamano_batch_invalido(simulador, valor):
+    with pytest.raises(ValueError):
+        simulador.configurar_simulacion(tamano_batch=valor)
+
+
+@pytest.mark.parametrize("valor", [1.5, "100", [], {}])
+def test_configurar_simulacion_tamano_batch_no_entero(simulador, valor):
+    with pytest.raises(TypeError):
+        simulador.configurar_simulacion(tamano_batch=valor)
 
 
 # ==================================================
@@ -234,6 +248,21 @@ def test_simular_intervalo_rendimiento_invalido(simulador, valor):
     with pytest.raises(ValueError):
         simulador.simular(10, medir_rendimiento=True, intervalo_rendimiento=valor)
 
+@pytest.mark.parametrize("valor", [1.5, "100", [], {}])
+def test_simular_tamano_batch_no_entero(simulador, valor):
+    with pytest.raises(TypeError):
+        simulador.simular(pasos=10, tamano_batch=valor)
+
+@pytest.mark.parametrize("valor", [0, -1, -100])
+def test_simular_tamano_batch_invalido(simulador, valor):
+    with pytest.raises(ValueError):
+        simulador.simular(pasos=10, tamano_batch=valor)
+
+@pytest.mark.parametrize("path", [123, 3.14, True, False, [], {}])
+def test_simular_path_guardado_invalido(simulador, path):
+    with pytest.raises(TypeError):
+        simulador.simular(pasos=1, guardar_resultados=True, path_guardado=path)
+
 def test_simular_cero_pasos_guarda_estado_inicial():
     red = RedDeNeuronas({"RS": 1})
     sim = Simulador()
@@ -241,7 +270,7 @@ def test_simular_cero_pasos_guarda_estado_inicial():
 
     tiempo = sim.simular(pasos=0)
 
-    assert tiempo == pytest.approx(0, abs=1.0e-5)
+    assert tiempo == 0
     assert sim.paso_actual == 1
     assert sim.historial["spikes"].shape == (1,)
     assert sim.historial["v"].shape == (1,)
@@ -250,7 +279,7 @@ def test_simular_cero_pasos_guarda_estado_inicial():
     assert not np.any(sim.historial["spikes"])
     assert sim.historial["v"][0] == pytest.approx(red.estado["v"][0])
     assert sim.historial["u"][0] == pytest.approx(red.estado["u"][0])
-    assert sim.historial["I"][0] == pytest.approx(0)
+    assert sim.historial["I"][0] == 0
 
 def test_simular_cero_pasos_y_continuar(simulador):
     simulador.simular(0)
@@ -293,6 +322,20 @@ def test_simular_varias_llamadas_continua_historial(simulador2):
     assert np.all(hist2["I"][1:6] == [5, 10])
     assert np.all(hist2["I"][6:] == [20, 30])
 
+def test_simular_devuelve_tiempo_ejecucion(simulador):
+    tiempo = simulador.simular(pasos=10)
+    assert isinstance(tiempo, float)
+    assert tiempo >= 0
+
+def test_simular_con_medicion_de_rendimiento(simulador):
+    simulador.simular(pasos=10, medir_rendimiento=True, intervalo_rendimiento=1)
+    rendimiento = simulador.rendimiento
+    assert rendimiento["tiempo_ejecucion"] > 0
+    assert rendimiento["cpu_media"] is not None
+    assert rendimiento["cpu_maxima"] is not None
+    assert rendimiento["ram_media"] is not None
+    assert rendimiento["ram_maxima"] is not None
+
 def test_simular_neurona_individual():
     neurona = N.copy()
     sim = Simulador()
@@ -317,7 +360,7 @@ def test_simular_corriente_vector(simulador2):
     simulador2.simular(5, I=[5, 10])
     hist = simulador2.historial
     assert np.array_equal(hist["I"][0], [0, 0])
-    assert np.all(hist["I"][1:] == np.array([5, 10]))
+    assert np.all(hist["I"][1:] == np.asarray([5, 10]))
 
 def test_simular_corriente_array(simulador2):
     I = np.asarray([5, 10], dtype=np.float64)
@@ -326,14 +369,61 @@ def test_simular_corriente_array(simulador2):
     assert np.array_equal(historial["I"][0], [0, 0])
     assert np.all(historial["I"][1:] == [5, 10])
 
+def test_simular_corriente_temporal_neurona():
+    sim = Simulador()
+    sim.cargar_red(N.copy())
+    corriente = np.asarray([0, 1, 2, 3])
+    sim.simular(pasos=4, I=corriente)
+    historial = sim.historial
+    esperada = np.asarray([0, 0, 1, 2, 3])
+    assert historial["I"].shape == (5,)
+    assert np.array_equal(historial["I"], esperada)
+
+def test_simular_corriente_matriz(simulador2):
+    corriente = np.asarray([[1, 2], [3, 4], [5, 6]])
+    simulador2.simular(pasos=3, I=corriente)
+    historial = simulador2.historial
+    assert historial["I"].shape == (4, 2)
+    esperada = np.asarray([[0, 0], [1, 2], [3, 4], [5, 6]])
+    assert np.array_equal(historial["I"], esperada)
+
+def test_simular_corriente_matriz_ciclica(simulador2):
+    corriente = np.asarray([[1, 2], [3, 4]])
+    simulador2.simular(pasos=5, I=corriente)
+    historial = simulador2.historial
+    esperada = np.asarray([[0, 0], [1, 2], [3, 4], [1, 2], [3, 4], [1, 2]])
+    assert np.array_equal(historial["I"], esperada)
+
+def test_simular_corriente_matriz_una_fila(simulador2):
+    corriente = np.asarray([[1, 2]])
+    simulador2.simular(pasos=3, I=corriente)
+    historial = simulador2.historial
+    assert historial["I"].shape == (4, 2)
+    assert np.array_equal(historial["I"], np.asarray([[0, 0], [1, 2], [1, 2], [1, 2]]))
+
 def test_simular_corriente_tamano_incorrecto(simulador2):
     with pytest.raises(ValueError):
         simulador2.simular(5, I=[1,2,3])
 
-@pytest.mark.parametrize("I", ["10", {"a": 1}])
+@pytest.mark.parametrize("I", ["10", {"I": 1}])
 def test_simular_corriente_tipo_invalido(simulador2, I):
     with pytest.raises(TypeError):
         simulador2.simular(5, I=I)
+
+def test_simular_corriente_vacia(simulador):
+    with pytest.raises(ValueError):
+        simulador.simular(pasos=1, I=np.array([]))
+
+def test_simular_corriente_mas_de_dos_dimensiones(simulador):
+    corriente = np.zeros((2, 1, 1))
+    with pytest.raises(ValueError):
+        simulador.simular(pasos=1, I=corriente)
+
+def test_simular_corriente_matriz_num_columnas_incorrecto(simulador2):
+    corriente = np.zeros((3, 3))
+
+    with pytest.raises(ValueError):
+        simulador2.simular(pasos=1, I=corriente)
 
 def test_simular_guarda_resultados(simulador):
     nombre_archivo = "./tests/tmp_sim/historial_desde_simular.npz"
@@ -358,6 +448,12 @@ def test_simular_sobrescribe_configuracion(simulador):
     simulador.simular(5, guardar_resultados=False, path_guardado=path)
     assert not Path(path).exists()
 
+def test_simular_parametros_personalizados_no_modifican_configuracion(simulador):
+    configuracion_inicial = simulador.configuracion
+    simulador.simular(pasos=1, guardar_resultados=True, path_guardado=str("./tests/tmp_sim/historial.npz"),
+                      mostrar_progreso=False, medir_rendimiento=True, intervalo_rendimiento=1, tamano_batch=10)
+    assert simulador.configuracion == configuracion_inicial
+
 
 # ==================================================
 # TESTS DE PROPIEDADES
@@ -373,14 +469,12 @@ def test_historial_devuelve_copia(simulador):
     hist["I"][0] = 10
     hist["nombre"][0] = "Prueba"
     hist["es_excitatoria"][0] = False
-    hist["dt"] = 1
     assert not simulador.historial["spikes"][0]
     assert simulador.historial["v"][0] != 0
     assert simulador.historial["u"][0] != 0
     assert simulador.historial["I"][0] != 10
     assert simulador.historial["nombre"][0] != "Prueba"
     assert bool(simulador.historial["es_excitatoria"][0])
-    assert simulador.historial["dt"] == 1
 
 def test_historial_dtype_distinto_de_red_dtype():
     red = RedDeNeuronas({"rs": 1}, precision=64)
@@ -393,6 +487,22 @@ def test_historial_dtype_distinto_de_red_dtype():
     assert hist["v"].dtype == np.float32
     assert hist["u"].dtype == np.float32
     assert hist["I"].dtype == np.float32
+
+def test_historial_none_antes_de_simular():
+    simulador = Simulador()
+    assert simulador.historial is None
+
+def test_propiedad_dt_no_se_modifica(simulador):
+    dt_inicial = simulador.dt
+    simulador.simular(pasos=2)
+    assert simulador.dt == dt_inicial
+
+def test_propiedad_red_despues_de_cargar_neurona():
+    simulador = Simulador()
+    neurona = N.copy()
+    simulador.cargar_red(neurona)
+    assert simulador.red is neurona
+    assert simulador.num_neuronas == 1
 
 
 # ==================================================
@@ -706,6 +816,14 @@ def test_simular_en_gpu_historial_en_cpu():
     assert hist["v"].dtype == np.float32
     assert hist["u"].dtype == np.float32
     assert hist["I"].dtype == np.float32
+
+@pytest.mark.skipif(not CUPY_DISPONIBLE, reason="CuPy no disponible")
+def test_simular_corriente_array_cupy(simulador2):
+    corriente = cp.array([[1, 2], [3, 4]])
+    simulador2.simular(pasos=2, I=corriente)
+    historial = simulador2.historial
+    assert isinstance(historial["I"], np.ndarray)
+    assert np.array_equal(historial["I"], np.array([[0, 0], [1, 2], [3, 4]]))
 
 @pytest.mark.skipif(not CUPY_DISPONIBLE, reason="CuPy/GPU no disponible.")
 def test_simular_en_gpu_rendimiento_gpu_medido():

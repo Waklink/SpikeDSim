@@ -1,8 +1,9 @@
 import pytest
 import numpy as np
+import scipy.sparse as sp
 
 from neurosim.Izhikevich import Neurona, RedDeNeuronas
-from neurosim.backend import cp, CUPY_DISPONIBLE
+from neurosim.backend import cp, cpsp, CUPY_DISPONIBLE
 
 
 # Diccionario básico usado al probar parámetros del constructor
@@ -152,6 +153,7 @@ def test_crear_con_matriz_de_conexiones_densa():
                          [-0.5, 0]]
     red = RedDeNeuronas(N2, conexiones=matriz_conexiones, sparse=False)
     assert red.num_conexiones == 2
+    assert red.conexiones == [pytest.approx(conexion) for conexion in matriz_conexiones]
 
 def test_crear_con_array_numpy_de_conexiones():
     matriz_conexiones = np.asarray([[0, 0.5], [-0.5, 0]])
@@ -163,6 +165,25 @@ def test_crear_con_array_cupy_de_conexiones():
     matriz_conexiones = cp.asarray([[0, 0.5], [-0.5, 0]])
     red = RedDeNeuronas(N2, conexiones=matriz_conexiones, backend="cupy")
     assert red.conexiones == [pytest.approx(conexion) for conexion in matriz_conexiones.tolist()]
+
+def test_crear_con_matriz_csr_scipy_de_conexiones():
+    matriz_conexiones = sp.csr_matrix([[0, 0.5], [-0.5, 0]])
+    red = RedDeNeuronas(N2, conexiones=matriz_conexiones)
+    assert red.conexiones == [pytest.approx([0, 0.5]), pytest.approx([-0.5, 0])]
+    assert red.num_conexiones == 2
+
+@pytest.mark.skipif(not CUPY_DISPONIBLE, reason="CuPy/GPU no disponible.")
+def test_crear_con_matriz_csr_cupy_de_conexiones():
+    matriz_conexiones = cpsp.csr_matrix(cp.asarray([[0, 0.5], [-0.5, 0]]))
+    red = RedDeNeuronas(N2, conexiones=matriz_conexiones, backend="cupy")
+    assert red.conexiones == [pytest.approx([0, 0.5]), pytest.approx([-0.5, 0])]
+    assert red.num_conexiones == 2
+
+@pytest.mark.parametrize("conexiones", [0, 1, 5, 6])
+@pytest.mark.parametrize("sparse", [True, False])
+def test_crear_con_numero_de_conexiones_valido(conexiones, sparse):
+    red = RedDeNeuronas(N3, conexiones=conexiones, sparse=sparse)
+    assert red.num_conexiones == conexiones
 
 def test_crear_con_demasiadas_conexiones():
     with pytest.raises(ValueError):
@@ -198,14 +219,14 @@ def test_crear_con_matriz_de_conexiones_pesos_invalidos(peso):
 
 def test_crear_con_aleat_param_tuplas():
     red = RedDeNeuronas({"rs": 3},
-                        aleat_param={"excitatoria": (0.01, 0.1, -5, 0.1),
-                                     "inhibitoria": (0.01, 0.1, -5, 0.1)},
+                        aleat_param={"excitatoria": (0.01, 0.1, -5, 1),
+                                     "inhibitoria": (0.01, 0.1, -5, 1)},
                         semilla=10, precision=64)
     param_orig = Neurona.predefinida("rs").parametros
-    assert all(param_orig[0] <= valor <= 0.01 + param_orig[0] for valor in red.parametros["a"])
-    assert all(param_orig[1] <= valor <= 0.1 + param_orig[1] for valor in red.parametros["b"])
-    assert all(abs(param_orig[2]) <= abs(valor) <= 5 + abs(param_orig[2]) for valor in red.parametros["c"])
-    assert all(param_orig[3] <= valor <= 0.1 + param_orig[3] for valor in red.parametros["d"])
+    assert all(param_orig[0] <= valor <= param_orig[0] + 0.01 for valor in red.parametros["a"])
+    assert all(param_orig[1] <= valor <= param_orig[1] + 0.1 for valor in red.parametros["b"])
+    assert all(param_orig[2] - 5 <= valor <= param_orig[2] for valor in red.parametros["c"])
+    assert all(param_orig[3] <= valor <= param_orig[3] + 1 for valor in red.parametros["d"])
 
 def test_crear_con_aleat_param_diccionarios():
     red = RedDeNeuronas({"rs": 2},
@@ -218,12 +239,24 @@ def test_crear_con_aleat_param_diccionarios():
     assert parametros["c"] == pytest.approx([Neurona.predefinida("rs").parametros[2]] * 2)
     assert parametros["d"] == pytest.approx([Neurona.predefinida("rs").parametros[3]] * 2)
 
-def test_aleat_param_con_semilla_es_reproducible():
+def test_crear_aleat_param_con_semilla_es_reproducible():
     aleat_param = {"excitatoria": (0.1, 0.1, 0.1, 0.1),
                    "inhibitoria": (0.1, 0.1, 0.1, 0.1)}
     red1 = RedDeNeuronas({"rs": 5}, aleat_param=aleat_param, semilla=20)
     red2 = RedDeNeuronas({"rs": 5}, aleat_param=aleat_param, semilla=20)
     assert red1.parametros == red2.parametros
+
+@pytest.mark.parametrize("aleat_param_invalido", [[], (), "aleatorio", 1])
+def test_crear_con_aleat_param_de_tipo_invalido(aleat_param_invalido):
+    with pytest.raises(TypeError):
+        RedDeNeuronas(N, aleat_param=aleat_param_invalido)
+
+@pytest.mark.parametrize("aleat_param_invalido", [{"excitatoria": None, "inhibitoria": {}},
+                                                  {"excitatoria": [], "inhibitoria": {}},
+                                                  {"excitatoria": "0.1", "inhibitoria": {}}])
+def test_crear_con_aleat_param_valor_invalido(aleat_param_invalido):
+    with pytest.raises(TypeError):
+        RedDeNeuronas(N, aleat_param=aleat_param_invalido)
 
 def test_crear_con_aleat_conex():
     red = RedDeNeuronas({"rs": 2, "fs": 2}, conexiones=6, aleat_conex=(0.5, 0.25), semilla=10)
@@ -236,11 +269,25 @@ def test_crear_con_aleat_conex():
     assert np.all(pesos_inh < 0)
     assert np.all(np.abs(pesos_inh) <= 0.25)
 
+@pytest.mark.parametrize("aleat_conex", [[0.5, 0.5], "0.5"])
+def test_crear_con_aleat_conex_no_tupla(aleat_conex):
+    with pytest.raises(TypeError):
+        RedDeNeuronas({"rs": 2, "fs": 2}, conexiones=6, aleat_conex=aleat_conex, semilla=10)
+
+@pytest.mark.parametrize("aleat_conex", [(0.5,), (0.5, 0.5, 0.5), (-0.1, 0.5), (0.5, 1.1)])
+def test_crear_con_aleat_conex_invalido(aleat_conex):
+    with pytest.raises(ValueError):
+        RedDeNeuronas({"rs": 2, "fs": 2}, conexiones=6, aleat_conex=aleat_conex, semilla=10)
 
 def test_crear_con_aleat_conex_con_semilla_es_reproducible():
     red1 = RedDeNeuronas(N3, conexiones=5, aleat_conex=(0.5, 0.5), semilla=10)
     red2 = RedDeNeuronas(N3, conexiones=5, aleat_conex=(0.5, 0.5), semilla=10)
     assert red1.conexiones == red2.conexiones
+
+@pytest.mark.parametrize("semilla", ["10", 1.5, []])
+def test_crear_con_semilla_invalida(semilla):
+    with pytest.raises(TypeError):
+        RedDeNeuronas(N, semilla=semilla)
 
 
 # ==================================================
@@ -273,6 +320,9 @@ def test_parametros_devuelve_copia():
 def test_neuronas_devuelve_copia():
     red = RedDeNeuronas(N)
     neuronas = red.neuronas
+    n = list(neuronas.keys())[0]
+    n.actualizar(10, 1)
+    assert list(red.neuronas.keys())[0].estado != pytest.approx(n.estado)
     neuronas.clear()
     assert len(red.neuronas) == 1
 
@@ -341,24 +391,22 @@ def test_informacion_indice_fuera_de_rango(indice):
     with pytest.raises(IndexError):
         red.informacion(indice)
 
-@pytest.mark.parametrize("indice", ["0", [0, "1"], []])
-def test_informacion_indice_invalido(indice):
+@pytest.mark.parametrize("indice", ["0", [0, "1"]])
+def test_informacion_indice_tipo_invalido(indice):
     red = RedDeNeuronas({"rs": 3})
-    with pytest.raises((TypeError, ValueError)):
+    with pytest.raises(TypeError):
+        red.informacion(indice)
+
+@pytest.mark.parametrize("indice", [[], slice(2, 2)])
+def test_informacion_indice_vacio(indice):
+    red = RedDeNeuronas({"rs": 3})
+    with pytest.raises(ValueError):
         red.informacion(indice)
 
 
 # ==================================================
 # TESTS DE ACTUALIZAR
 # ==================================================
-
-def test_actualizar_sin_spike():
-    red = RedDeNeuronas(N)
-    estado_inicial = red.estado
-    spikes = red.actualizar(0)
-    assert red.estado != estado_inicial
-    assert spikes.shape == (1,)
-    assert not spikes.any()
 
 def test_actualizar_genera_spike():
     red = RedDeNeuronas(N)
@@ -381,10 +429,10 @@ def test_actualizar_corriente_como_escalar():
     assert red.estado != estado_inicial
     assert spikes.shape == (2,)
 
-def test_actualizar_corriente_como_vector():
+@pytest.mark.parametrize("corriente", [np.asarray([10, 5]), [10, 5]])
+def test_actualizar_corriente_como_vector(corriente):
     red = RedDeNeuronas(N2)
     estado_inicial = red.estado
-    corriente = np.asarray([10, 5])
     spikes = red.actualizar(corriente)
     assert red.estado != estado_inicial
     assert spikes.shape == (2,)
@@ -469,6 +517,15 @@ def test_establecer_estado_longitud_incorrecta(parametro):
     with pytest.raises(ValueError):
         red.establecer_estado(**parametros)
 
+@pytest.mark.parametrize("parametro", ["v", "u"])
+@pytest.mark.parametrize("valor", [1, "10", (1)])
+def test_establecer_estado_tipo_invalido(parametro, valor):
+    parametros = {"v": None, "u": None}
+    parametros[parametro] = valor
+    red = RedDeNeuronas(N)
+    with pytest.raises(TypeError):
+        red.establecer_estado(**parametros)
+
 
 # ==================================================
 # TESTS DE CONVERSIONES
@@ -478,7 +535,9 @@ def test_establecer_estado_longitud_incorrecta(parametro):
 @pytest.mark.parametrize(("backend", "nuevo_backend"), [("numpy", "cupy"), ("cupy", "numpy"),
                                                         ("cupy", "cupy")])
 def test_convertir_backend_con_cupy(backend, nuevo_backend):
-    red = RedDeNeuronas(N, backend=backend)
+    red = RedDeNeuronas({"rs": 1, "fs": 1}, conexiones=[[0, 0.5], [-0.5, 0]], backend=backend, semilla=42,
+                        aleat_param={"excitatoria": {"a": 0.01}, "inhibitoria": {"a": 0.02}})
+
     nueva_red = red.convertir_backend(nuevo_backend)
     assert red is not nueva_red
     assert red.estado == nueva_red.estado
@@ -489,11 +548,13 @@ def test_convertir_backend_con_cupy(backend, nuevo_backend):
     assert red.backend == backend
     assert nueva_red.backend == nuevo_backend
     assert red.dtype == nueva_red.dtype
-    nueva_red.establecer_estado(v=[10])
+    red.establecer_estado(v=[10, 5])
     assert nueva_red.estado != red.estado
 
 def test_convertir_backend_numpy_a_numpy():
-    red = RedDeNeuronas(N, backend="numpy")
+    red = RedDeNeuronas({"rs": 1, "fs": 1}, conexiones=[[0, 0.5], [-0.5, 0]], semilla=42,
+                        aleat_param={"excitatoria": {"a": 0.01}, "inhibitoria": {"a": 0.02}})
+
     nueva_red = red.convertir_backend("numpy")
     assert red is not nueva_red
     assert red.estado == nueva_red.estado
@@ -504,13 +565,15 @@ def test_convertir_backend_numpy_a_numpy():
     assert red.backend == "numpy"
     assert nueva_red.backend == "numpy"
     assert red.dtype == nueva_red.dtype
-    nueva_red.establecer_estado(v=[10])
+    red.establecer_estado(v=[10, 5])
     assert nueva_red.estado != red.estado
 
 @pytest.mark.parametrize("formato", [True, False])
 @pytest.mark.parametrize("nuevo_formato", [True, False])
 def test_convertir_formato_conexiones(formato, nuevo_formato):
-    red = RedDeNeuronas(N, sparse=formato)
+    red = RedDeNeuronas({"rs": 1, "fs": 1}, conexiones=[[0, 0.5], [-0.5, 0]], sparse=formato, semilla=42,
+                        aleat_param={"excitatoria": {"a": 0.01}, "inhibitoria": {"a": 0.02}})
+
     nueva_red = red.convertir_formato(nuevo_formato)
     assert red is not nueva_red
     assert red.estado == nueva_red.estado
@@ -521,13 +584,15 @@ def test_convertir_formato_conexiones(formato, nuevo_formato):
     assert nueva_red.sparse == nuevo_formato
     assert red.backend == nueva_red.backend
     assert red.dtype == nueva_red.dtype
-    nueva_red.establecer_estado(v=[10])
+    red.establecer_estado(v=[10, 5])
     assert nueva_red.estado != red.estado
 
 @pytest.mark.parametrize("precision", [32, 64])
 @pytest.mark.parametrize("nueva_precision", [32, 64])
 def test_cambiar_precision(precision, nueva_precision):
-    red = RedDeNeuronas(N, precision=precision)
+    red = RedDeNeuronas({"rs": 1, "fs": 1}, conexiones=[[0, 0.5], [-0.5, 0]], precision=precision,
+                        semilla=42, aleat_param={"excitatoria": {"a": 0.01}, "inhibitoria": {"a": 0.02}})
+
     nueva_red = red.cambiar_precision(nueva_precision)
     assert red is not nueva_red
 
@@ -545,7 +610,7 @@ def test_cambiar_precision(precision, nueva_precision):
     nuevo_dtype = np.float32 if nueva_precision == 32 else np.float64
     assert red.dtype == dtype
     assert nueva_red.dtype == nuevo_dtype
-    nueva_red.establecer_estado(v=[10])
+    red.establecer_estado(v=[10, 5])
     assert nueva_red.estado != red.estado
 
 def test_copy():
@@ -557,3 +622,25 @@ def test_copy():
     assert copia.conexiones == red.conexiones
     copia.establecer_estado(v=[10])
     assert copia.estado != red.estado
+
+def test_copy_con_aleatorizacion():
+    aleat_param = {"excitatoria": {"a": 0.01, "b": 0.02}, "inhibitoria": {"a": 0.03, "d": 0.04}}
+    red = RedDeNeuronas({"rs": 2, "fs": 2}, conexiones=5, aleat_param=aleat_param, semilla=10)
+    copia = red.copy()
+    assert copia is not red
+    assert copia.parametros == pytest.approx(red.parametros)
+    assert copia.conexiones == red.conexiones
+    assert copia.estado == red.estado
+    assert copia.aleatorizacion == red.aleatorizacion
+
+
+# ==================================================
+# TESTS DE PROPIEDADES
+# ==================================================
+
+@pytest.mark.parametrize("precision, dtype", [(32, np.float32), (64, np.float64)])
+def test_precision_y_dtype(precision, dtype):
+    red = RedDeNeuronas(N, precision=precision)
+
+    assert red.precision == precision
+    assert red.dtype == dtype

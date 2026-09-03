@@ -88,6 +88,16 @@ def test_crear_con_ambos_parametros_pasados(simulador, simulador2):
     vis = Visualizar(path, simulador2.historial)
     comprobar_historial_completo(vis.historial, 2)
 
+def test_crear_sin_argumentos():
+    vis = Visualizar()
+    assert vis.historial is None
+
+def test_crear_desde_path_como_pathlib(simulador):
+    path = "./tests/tmp_vis/historial_pathlib.npz"
+    simulador.simular(5, guardar_resultados=True, path_guardado=path)
+    vis = Visualizar(path)
+    comprobar_historial_completo(vis.historial, 1)
+
 def test_crear_con_red_de_una_neurona_con_historial(simulador):
     simulador.simular(5)
     vis = Visualizar(historial=simulador.historial)
@@ -171,6 +181,13 @@ def test_cargar_historial_desde_archivo(simulador):
     nombre_archivo = "./tests/tmp_vis/historial_cargado.npz"
     simulador.simular(5, guardar_resultados=True, path_guardado=nombre_archivo)
     vis = Visualizar(nombre_archivo)
+    comprobar_historial_completo(vis.historial, 1)
+
+def test_cargar_historial_pathlib(simulador):
+    path = "./tests/tmp_vis/historial_cargado_pathlib.npz"
+    simulador.simular(5, guardar_resultados=True, path_guardado=path)
+    vis = Visualizar()
+    vis.cargar_historial(path)
     comprobar_historial_completo(vis.historial, 1)
 
 def test_cargar_nuevo_historial_sobreescribe_historial_anterior(simulador, simulador2):
@@ -289,6 +306,32 @@ def test_normalizacion_arrays(parametro, valor, num_neuronas):
     vis = Visualizar(historial={parametro: valor})
     comprobar_historial_parcial(vis.historial, num_neuronas, 0)
 
+@pytest.mark.parametrize("parametro",["spikes", "v", "u", "I"])
+def test_normalizacion_arrays_conserva_valores(parametro):
+    valor = [1, 2, 3]
+    vis = Visualizar(historial={parametro: valor})
+    assert np.array_equal(vis.historial[parametro], np.asarray(valor))
+
+def test_normalizacion_nombre_string_se_convierte_en_lista():
+    vis = Visualizar(historial={"nombre": "RS"})
+    assert vis.nombre == ["RS"]
+    assert isinstance(vis.nombre, list)
+
+def test_normalizacion_es_excitatoria_bool_se_convierte_en_lista():
+    vis = Visualizar(historial={"es_excitatoria": True})
+    assert vis.es_excitatoria == [True]
+    assert isinstance(vis.es_excitatoria, list)
+
+def test_normalizacion_es_excitatoria_enteros_se_convierten_a_bool():
+    vis = Visualizar(historial={"es_excitatoria": [1, 0]})
+    assert vis.es_excitatoria == [True, False]
+    assert all(isinstance(valor, bool) for valor in vis.es_excitatoria)
+
+def test_normalizacion_dt_entero_se_convierte_a_float():
+    vis = Visualizar(historial={"dt": 2})
+    assert isinstance(vis.dt, float)
+    assert vis.dt == 2
+
 @pytest.mark.parametrize("valor, num_neuronas", [("RS", 1), (np.asarray(["RS", "RS"]), 2)])
 def test_normalizacion_nombre(valor, num_neuronas):
     vis = Visualizar(historial={"nombre": valor})
@@ -328,8 +371,8 @@ def test_crear_con_historial_incompleto(simulador):
     assert hist is not None
     assert "spikes" in hist
     assert hist["spikes"] is None
-    assert all((clave in hist) and (hist[clave] is not None) for clave in
-                   ("v", "u", "I", "nombre", "es_excitatoria", "dt"))
+    assert all((clave in hist) and (hist[clave] is not None) for clave in ("v", "u", "I", "nombre",
+                                                                           "es_excitatoria", "dt"))
 
 def test_historiales_inconsistentes():
     hist = {"spikes": np.zeros((5, 2)), "v": np.zeros((6, 2))}
@@ -361,8 +404,8 @@ def test_historial_dt_invalido(valor):
     with pytest.raises(ValueError):
         Visualizar(historial={"dt": valor})
 
-@pytest.mark.parametrize("valor", ["texto", object()])
-def test_historial_dt_no_convertible(valor):
+@pytest.mark.parametrize("valor", ["texto", [2]])
+def test_historial_dt_no_numero_real(valor):
     with pytest.raises((TypeError, ValueError)):
         Visualizar(historial={"dt": valor})
 
@@ -375,7 +418,6 @@ def test_historial_devuelve_copia(simulador):
     simulador.simular(5)
     vis = Visualizar(historial=simulador.historial)
     hist = vis.historial
-
     hist["spikes"][0] = True
     hist["v"][0] = 0
     hist["u"][0] = 0
@@ -383,7 +425,6 @@ def test_historial_devuelve_copia(simulador):
     hist["nombre"][0] = "Prueba"
     hist["es_excitatoria"][0] = False
     hist["dt"] = 0.5
-    
     hist2 = vis.historial
     assert not np.array_equal(hist2["spikes"], hist["spikes"])
     assert not np.array_equal(hist2["v"], hist["v"])
@@ -427,14 +468,10 @@ def test_raster_plot_seleccion_neuronas(simulador2, neuronas):
 
 
 def test_raster_plot_separar_tipo_reordena_indices():
-    hist = {
-        "spikes": np.array([[1, 0], [0, 1]]),
-        "es_excitatoria": [False, True],
-        "nombre": ["I", "E"],
-        "dt": 1.0
-    }
+    hist = {"spikes": np.asarray([[1, 0], [0, 1]]), "es_excitatoria": [False, True],
+            "nombre": ["I", "E"], "dt": 1}
     vis = Visualizar(historial=hist)
-    fig, ax = vis.raster_plot(separar_tipo=True, mostrar=False)
+    _, ax = vis.raster_plot(separar_tipo=True, mostrar=False)
     assert [int(label.get_text()) for label in ax.get_yticklabels()] == [1, 0]
 
 
@@ -448,6 +485,35 @@ def test_raster_plot_separar_tipo_sin_datos():
     vis = Visualizar(historial=hist)
     with pytest.raises(ValueError):
         vis.raster_plot(mostrar=False)
+
+def test_raster_plot_usa_dt():
+    hist = {"spikes": np.asarray([[1], [0], [1]]), "dt": 2}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.raster_plot(separar_tipo=False, mostrar=False)
+    offsets = ax.collections[0].get_offsets()
+    assert np.array_equal(offsets[:, 0], np.asarray([0, 4]))
+
+def test_raster_plot_sin_dt_usa_un_ms():
+    hist = {"spikes": np.asarray([[1], [0], [1]])}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.raster_plot(separar_tipo=False, mostrar=False)
+    offsets = ax.collections[0].get_offsets()
+    assert np.array_equal(offsets[:, 0], np.asarray([0, 2]))
+
+@pytest.mark.parametrize("kwargs", [{"max_labels": 0}, {"max_labels": -1}, {"max_labels": 1.5},
+                                    {"markersize": 0}, {"markersize": -1}, {"markersize": "2"},
+                                    {"figsize": (10,)}, {"figsize": (10, -1)}, {"figsize": ("10", 6)}])
+def test_raster_plot_parametros_invalidos(kwargs):
+    hist = {"spikes": np.zeros((5, 2)), "es_excitatoria": [True, False]}
+    vis = Visualizar(historial=hist)
+    with pytest.raises((TypeError, ValueError)):
+        vis.raster_plot(mostrar=False, **kwargs)
+
+def test_raster_plot_max_labels():
+    hist = {"spikes": np.zeros((5, 5)), "es_excitatoria": [True, True, True, False, False]}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.raster_plot(max_labels=2, mostrar=False)
+    assert len(ax.get_yticks()) <= 2
 
 # Potencial de membrana
 def test_potencial_membrana_una_neurona(simulador):
@@ -475,6 +541,24 @@ def test_potencial_membrana_sin_v():
     with pytest.raises(ValueError):
         vis.potencial_membrana(mostrar=False)
 
+def test_potencial_membrana_usa_dt():
+    hist = {"v": np.asarray([[1], [2], [3]]), "dt": 2}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.potencial_membrana(mostrar=False)
+    assert np.array_equal(ax.lines[0].get_xdata(), np.asarray([0, 2, 4]))
+
+def test_potencial_membrana_agrupa_neuronas_iguales():
+    hist = {"v": np.asarray([ [1, 1], [2, 2], [3, 3]]), "nombre": ["RS", "RS"]}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.potencial_membrana(neuronas=None, mostrar=False)
+    assert len(ax.lines) == 1
+
+def test_potencial_membrana_tolerancia_agrupa_neuronas_similares():
+    hist = {"v": np.asarray([[1, 1.05], [2, 2.05], [3, 3.05]]), "nombre": ["RS", "RS"]}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.potencial_membrana(neuronas=None, tolerancia_similitud=0.1, mostrar=False)
+    assert len(ax.lines) == 1
+
 # Variable de recuperación
 def test_variable_recuperacion_una_neurona(simulador):
     simulador.simular(10)
@@ -501,6 +585,18 @@ def test_variable_recuperacion_sin_u():
     with pytest.raises(ValueError):
         vis.variable_recuperacion(mostrar=False)
 
+def test_variable_recuperacion_usa_dt():
+    hist = {"u": np.asarray([[1], [2], [3]]), "dt": 2}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.variable_recuperacion(mostrar=False)
+    assert np.array_equal(ax.lines[0].get_xdata(), np.asarray([0, 2, 4]))
+
+def test_variable_recuperacion_agrupa_neuronas_iguales():
+    hist = {"u": np.asarray([[1, 1], [2, 2], [3, 3]]), "nombre": ["RS", "RS"]}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.variable_recuperacion(neuronas=None, mostrar=False)
+    assert len(ax.lines) == 1
+
 # Corriente, I
 def test_corriente_basica(simulador):
     simulador.simular(10)
@@ -526,6 +622,18 @@ def test_corriente_sin_I():
     vis = Visualizar(historial={"v": np.zeros(5)})
     with pytest.raises(ValueError):
         vis.corriente(mostrar=False)
+
+def test_corriente_usa_dt():
+    hist = {"I": np.asarray([[1], [2], [3]]), "dt": 2}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.corriente(mostrar=False)
+    assert np.array_equal(ax.lines[0].get_xdata(), np.asarray([0, 2, 4]))
+
+def test_corriente_agrupa_neuronas_iguales():
+    hist = {"I": np.asarray([[1, 1], [2, 2], [3, 3]]), "nombre": ["RS", "RS"]}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.corriente(neuronas=None, mostrar=False)
+    assert len(ax.lines) == 1
 
 # Espacio de fase
 def test_espacio_fase_varias_neuronas(simulador2):
@@ -580,6 +688,28 @@ def test_frecuencia_disparos_sin_spikes():
     with pytest.raises(ValueError):
         vis.frecuencia_disparos(mostrar=False)
 
+def test_frecuencia_disparos_calculo():
+    hist = {"spikes": np.asarray([[1], [0], [1], [0], [1] ]), "dt": 1}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.frecuencia_disparos(mostrar=False)
+    # 5 instantes -> duración = 4 ms = 0.004 s.
+    # 3 spikes / 0.004 s = 750 Hz.
+    assert ax.collections[0].get_offsets()[0, 1] == pytest.approx(750)
+
+def test_frecuencia_disparos_usa_dt():
+    hist = {"spikes": np.asarray([[1], [0], [1]]), "dt": 2}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.frecuencia_disparos(mostrar=False)
+    # Duración = (3 - 1) * 2 ms = 4 ms.
+    # 2 spikes / 0.004 s = 500 Hz.
+    assert ax.collections[0].get_offsets()[0, 1] == pytest.approx(500)
+
+def test_frecuencia_disparos_duracion_cero():
+    hist = {"spikes": np.asarray([[1]])}
+    vis = Visualizar(historial=hist)
+    _, ax = vis.frecuencia_disparos(mostrar=False)
+    assert ax.collections[0].get_offsets()[0, 1] == pytest.approx(0)
+
 # Tests generales para todos los métodos de gráficos
 def test_graficos_con_historial_de_un_instante(simulador):
     simulador.simular(0)
@@ -595,6 +725,30 @@ def test_graficos_con_historial_de_un_instante(simulador):
 # TESTS DE VALIDACIONES COMUNES DE GRÁFICOS
 # ==================================================
 
+def test_mostrar_grafica():
+    vis = Visualizar()
+    datos = np.asarray([[1, 2], [3, 4], [5, 6]])
+    etiquetas = ["RS", "FS"]
+    fig, ax = vis._mostrar_grafica(datos=datos, etiquetas=etiquetas, dt=2, ylabel="v (mV)",
+                                   figsize=(10, 6), titulo="Prueba", max_etiquetas_leyenda=10,
+                                   mostrar=False)
+    assert fig is not None
+    assert ax is not None
+    assert len(ax.lines) == 2
+    assert ax.get_xlabel() == "Tiempo (ms)"
+    assert ax.get_ylabel() == "v (mV)"
+    assert ax.get_title() == "Prueba"
+    assert np.array_equal(ax.lines[0].get_xdata(), np.asarray([0, 2, 4]))
+
+def test_mostrar_grafica_limite_leyenda():
+    vis = Visualizar()
+    datos = np.asarray([[1, 2], [3, 4]])
+    etiquetas = ["RS", "FS"]
+    _, ax = vis._mostrar_grafica(datos=datos, etiquetas=etiquetas, dt=1, ylabel="v (mV)",
+                                 figsize=(10, 6), titulo="Prueba", max_etiquetas_leyenda=1,
+                                 mostrar=False)
+    assert ax.get_legend() is None
+
 @pytest.mark.parametrize("neuronas", [10, -10])
 def test_obtener_indices_neuronas_fuera_de_rango(simulador2, neuronas):
     simulador2.simular(5)
@@ -605,7 +759,7 @@ def test_obtener_indices_neuronas_fuera_de_rango(simulador2, neuronas):
 def test_obtener_indices_neuronas_lista_vacia(simulador2):
     simulador2.simular(5)
     vis = Visualizar(historial=simulador2.historial)
-    with pytest.raises((IndexError, ValueError)):
+    with pytest.raises(ValueError):
         vis._obtener_indices_neuronas([], 2)
 
 @pytest.mark.parametrize("neuronas, esperado", [(None, np.asarray([0, 1])), (0, np.asarray([0])),
@@ -617,9 +771,191 @@ def test_obtener_indices_neuronas_validos(simulador2, neuronas, esperado):
     indices = vis._obtener_indices_neuronas(neuronas, 2)
     assert np.array_equal(indices, esperado)
 
+def test_obtener_indices_neuronas_tuple(simulador2):
+    simulador2.simular(5)
+    vis = Visualizar(historial=simulador2.historial)
+    indices = vis._obtener_indices_neuronas((0, 1), 2)
+    assert np.array_equal(indices, np.asarray([0, 1]))
+
+def test_obtener_indices_neuronas_numpy_array(simulador2):
+    simulador2.simular(5)
+    vis = Visualizar(historial=simulador2.historial)
+    indices = vis._obtener_indices_neuronas(np.asarray([1, 0]), 2)
+    assert np.array_equal(indices, np.asarray([1, 0]))
+
+def test_obtener_indices_neuronas_slice_negativo(simulador2):
+    simulador2.simular(5)
+    vis = Visualizar(historial=simulador2.historial)
+    indices = vis._obtener_indices_neuronas(slice(-1, None), 2)
+    assert np.array_equal(indices, np.asarray([1]))
+
 @pytest.mark.parametrize("neuronas", ["0", 1.5, [0, "0"]])
 def test_obtener_indices_neuronas_tipo_invalido(simulador2, neuronas):
     simulador2.simular(10)
     vis = Visualizar(historial=simulador2.historial)
     with pytest.raises(TypeError):
         vis._obtener_indices_neuronas(neuronas, 2)
+
+def test_separar_neuronas_una_neurona():
+    vis = Visualizar()
+    datos = np.asarray([1, 2, 3])
+    datos_separados, indices, etiquetas = vis._separar_neuronas(datos, None)
+    assert datos_separados.shape == (3, 1)
+    assert np.array_equal(indices, np.asarray([0]))
+    assert etiquetas == ["Neurona 0"]
+
+def test_separar_neuronas_varias_neuronas():
+    vis = Visualizar()
+    datos = np.asarray([[1, 2, 3], [4, 5, 6]])
+    datos_separados, indices, etiquetas = vis._separar_neuronas(datos, [0, 2])
+    assert datos_separados.shape == (2, 2)
+    assert np.array_equal(datos_separados, datos[:, [0, 2]])
+    assert np.array_equal(indices, np.asarray([0, 2]))
+    assert etiquetas == ["Neurona 0", "Neurona 2"]
+
+def test_separar_neuronas_con_nombres():
+    vis = Visualizar()
+    datos = np.asarray([[1, 2], [3, 4]])
+    nombres = ["RS", "FS"]
+    datos_separados, indices, etiquetas = vis._separar_neuronas(datos, None, nombres)
+    assert np.array_equal(datos_separados, datos)
+    assert np.array_equal(indices, np.asarray([0, 1]))
+    assert etiquetas == ["RS", "FS"]
+
+def test_separar_raster_por_tipo_solo_excitatorias():
+    vis = Visualizar()
+    indices = np.asarray([0, 1])
+    es_excitatoria = [True, True]
+    posiciones, separacion, etiquetas = vis._separar_raster_por_tipo(indices, es_excitatoria)
+    assert np.array_equal(posiciones, np.asarray([0, 1]))
+    assert separacion is None
+    assert "Excitatorias" in etiquetas
+    assert "Inhibitorias" not in etiquetas
+
+def test_separar_raster_por_tipo_solo_inhibitorias():
+    vis = Visualizar()
+    indices = np.asarray([0, 1])
+    es_excitatoria = [False, False]
+    posiciones, separacion, etiquetas = vis._separar_raster_por_tipo(indices, es_excitatoria)
+    assert np.array_equal(posiciones, np.asarray([0, 1]))
+    assert separacion is None
+    assert "Inhibitorias" in etiquetas
+    assert "Excitatorias" not in etiquetas
+
+def test_separar_raster_por_tipo_mixto():
+    vis = Visualizar()
+    indices = np.asarray([0, 1, 2, 3])
+    es_excitatoria = [False, True, False, True]
+    posiciones, separacion, etiquetas = vis._separar_raster_por_tipo(indices, es_excitatoria)
+    assert np.array_equal(posiciones, np.asarray([1, 3, 0, 2]))
+    assert separacion == 1.5
+    assert "Excitatorias" in etiquetas
+    assert "Inhibitorias" in etiquetas
+
+def test_agrupar_neuronas_similares_igualdad_exacta():
+    vis = Visualizar()
+    datos = np.asarray([[1, 2, 3], [4, 5, 6]])
+    indices = np.asarray([0, 1, 2])
+    etiquetas = ["RS", "RS", "RS"]
+    datos_agrupados, etiquetas_agrupadas = (vis._agrupar_neuronas_similares(datos, indices, etiquetas,
+                                                                            tolerancia=0))
+    assert datos_agrupados.shape[1] == 3
+    assert len(etiquetas_agrupadas) == 3
+
+def test_agrupar_neuronas_similares_agrupa_iguales():
+    vis = Visualizar()
+    datos = np.asarray([[1, 1, 2], [4, 4, 5]])
+    indices = np.asarray([0, 1, 2])
+    etiquetas = ["RS", "RS", "RS"]
+    datos_agrupados, etiquetas_agrupadas = vis._agrupar_neuronas_similares(datos, indices, etiquetas,
+                                                                           tolerancia=0)
+    assert datos_agrupados.shape == (2, 2)
+    assert len(etiquetas_agrupadas) == 2
+
+def test_agrupar_neuronas_similares_no_agrupa_nombres_diferentes():
+    vis = Visualizar()
+    datos = np.asarray([[1, 1], [4, 4]])
+    indices = np.asarray([0, 1])
+    etiquetas = ["RS", "FS"]
+    datos_agrupados, etiquetas_agrupadas = vis._agrupar_neuronas_similares(datos, indices, etiquetas,
+                                                                           tolerancia=0)
+    assert datos_agrupados.shape == datos.shape
+    assert len(etiquetas_agrupadas) == 2
+
+def test_agrupar_neuronas_similares_dentro_de_tolerancia():
+    vis = Visualizar()
+    datos = np.asarray([[1, 1.1], [2, 2.1]])
+    indices = np.asarray([0, 1])
+    etiquetas = ["RS", "RS"]
+    datos_agrupados, etiquetas_agrupadas = vis._agrupar_neuronas_similares(datos, indices, etiquetas,
+                                                                           tolerancia=0.2)
+    assert datos_agrupados.shape == (2, 1)
+    assert len(etiquetas_agrupadas) == 1
+
+def test_agrupar_neuronas_similares_fuera_de_tolerancia():
+    vis = Visualizar()
+    datos = np.asarray([[1, 2], [2, 4]])
+    indices = np.asarray([0, 1])
+    etiquetas = ["RS", "RS"]
+    datos_agrupados, etiquetas_agrupadas = vis._agrupar_neuronas_similares(datos, indices, etiquetas,
+                                                                           tolerancia=0.1)
+    assert datos_agrupados.shape == datos.shape
+    assert len(etiquetas_agrupadas) == 2
+
+def test_agrupar_neuronas_similares_dos_variables():
+    vis = Visualizar()
+    datos_v = np.asarray([[1, 1.05], [2, 2.05]])
+    datos_u = np.asarray([[3, 3.05], [4, 4.05]])
+    indices = np.asarray([0, 1])
+    etiquetas = ["RS", "RS"]
+    v_agrupado, u_agrupado, etiquetas_agrupadas = vis._agrupar_neuronas_similares_dos_variables(datos_v,
+                                                            datos_u, indices, etiquetas, tolerancia=0.1)
+    assert v_agrupado.shape == (2, 1)
+    assert u_agrupado.shape == (2, 1)
+    assert len(etiquetas_agrupadas) == 1
+
+def test_agrupar_neuronas_similares_dos_variables_no_agrupa_si_una_difiere():
+    vis = Visualizar()
+    datos_v = np.asarray([[1, 1.05], [2, 2.05]])
+    datos_u = np.asarray([[3, 10], [4, 20]])
+    indices = np.asarray([0, 1])
+    etiquetas = ["RS", "RS"]
+    v_agrupado, u_agrupado, etiquetas_agrupadas = vis._agrupar_neuronas_similares_dos_variables(datos_v,
+                                                            datos_u, indices, etiquetas, tolerancia=0.1)
+    assert v_agrupado.shape == datos_v.shape
+    assert u_agrupado.shape == datos_u.shape
+    assert len(etiquetas_agrupadas) == 2
+
+def test_agrupar_neuronas_similares_dos_variables_formas_diferentes():
+    vis = Visualizar()
+    datos_v = np.zeros((5, 2))
+    datos_u = np.zeros((5, 3))
+    indices = np.asarray([0, 1])
+    etiquetas = ["RS", "RS"]
+    with pytest.raises(ValueError):
+        vis._agrupar_neuronas_similares_dos_variables( datos_v, datos_u, indices, etiquetas)
+
+@pytest.mark.parametrize("indices, esperado", [([0], "0"), ([0, 1, 2, 3], "0 a 3"),
+                                               ([0, 2, 5], "0, 2, 5"),
+                                               ([0, 1, 2, 5, 6, 7], "0 a 2, 5 a 7")])
+def test_formatear_indices_neuronas(indices, esperado):
+    vis = Visualizar()
+    resultado = vis._formatear_indices_neuronas(np.asarray(indices))
+    assert resultado == esperado
+
+def test_obtener_clave_inexistente():
+    vis = Visualizar(historial={"v": np.zeros(5)})
+    assert vis._obtener("clave_inexistente") is None
+
+def test_obtener_array_devuelve_copia():
+    datos = np.zeros(5)
+    vis = Visualizar(historial={"v": datos})
+    resultado = vis._obtener("v")
+    resultado[0] = 100
+    assert vis.v[0] != 100
+
+def test_obtener_lista_devuelve_copia():
+    vis = Visualizar(historial={"nombre": ["RS", "FS"]})
+    resultado = vis._obtener("nombre")
+    resultado[0] = "Prueba"
+    assert vis.nombre[0] == "RS"
