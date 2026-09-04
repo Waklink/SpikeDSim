@@ -5,7 +5,7 @@ import numpy as np
 import cupy as cp
 import psutil
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas
 
 
 process = psutil.Process(os.getpid())

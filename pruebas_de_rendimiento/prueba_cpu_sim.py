@@ -2,7 +2,7 @@ import numpy as np
 import psutil
 import os
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas, Simulador
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas, Simulador
 
 process = psutil.Process(os.getpid())
 

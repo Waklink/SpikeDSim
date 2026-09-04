@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 from multiprocessing import Process, Queue
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas, Simulador
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas, Simulador
 
 
 # Comprobar si cupy está disponible, para evitar problemas más adelante

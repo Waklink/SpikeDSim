@@ -5,8 +5,8 @@ from pathlib import Path
 import shutil
 import json
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas, Simulador
-from neurosim.backend import cp, CUPY_DISPONIBLE
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas, Simulador
+from spikedsim.backend import cp, CUPY_DISPONIBLE
 
 
 # Decidir si mantener los archivos temporales

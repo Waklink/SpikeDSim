@@ -2,8 +2,8 @@ import numpy as np
 import psutil
 import os
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas
-from neurosim.backend import cp, CUPY_DISPONIBLE
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas
+from spikedsim.backend import cp, CUPY_DISPONIBLE
 
 if not CUPY_DISPONIBLE:
     raise ImportError("cupy no instalado.")

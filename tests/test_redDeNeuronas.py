@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 import scipy.sparse as sp
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas
-from neurosim.backend import cp, cpsp, CUPY_DISPONIBLE
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas
+from spikedsim.backend import cp, cpsp, CUPY_DISPONIBLE
 
 
 # Diccionario básico usado al probar parámetros del constructor

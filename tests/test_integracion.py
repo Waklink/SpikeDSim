@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
 
-from neurosim.Izhikevich import Neurona, RedDeNeuronas, Simulador
-from neurosim.backend import cp, CUPY_DISPONIBLE
+from spikedsim.Izhikevich import Neurona, RedDeNeuronas, Simulador
+from spikedsim.backend import CUPY_DISPONIBLE
 
 
 # ==================================================
