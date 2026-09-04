@@ -1,0 +1,11 @@
+# Entorno virtual
+.venv/
+
+# Caché de pytest
+.pytest_cache/
+
+# Caché de Python
+__pycache__/
+
+# Metadatos generados por setuptools
+src/spikedsim.egg-info/

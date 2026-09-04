@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "spikedsim"
 version = "0.1.0"
-description = "Implementación en Python de un simulador de redes neuronales basado en modelos neuronales."
+description = "Simulador en Python de redes neuronales de disparo basado en modelos neuronales."
 authors = [{name = "Catalin Antonio Dinu"}]
 
 requires-python = ">=3.13"
