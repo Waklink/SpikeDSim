@@ -34,7 +34,7 @@ def medir(texto):
 
     print(f"\nDespués de inicializar los historiales: {ram():.6f} MB\n")
 
-    sim.simular(PASOS, corriente, mostrar_progreso=True)
+    sim.simular(PASOS, corriente, mostrar_progreso=True, medir_rendimiento=True)
 
     print(f"\nFinal: {ram():.6f} MB")
 

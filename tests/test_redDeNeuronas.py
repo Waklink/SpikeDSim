@@ -205,13 +205,6 @@ def test_crear_con_matriz_de_conexiones_de_diagonal_no_cero():
     with pytest.raises(ValueError):
         RedDeNeuronas(N2, conexiones=matriz_conexiones)
 
-@pytest.mark.parametrize("peso", [3, -2])
-def test_crear_con_matriz_de_conexiones_pesos_invalidos(peso):
-    matriz_conexiones = [[0, peso],
-                         [-peso, 0]]
-    with pytest.raises(ValueError):
-        RedDeNeuronas(N2, conexiones=matriz_conexiones)
-
 
 # ==================================================
 # TESTS DE ALEATORIZACIÓN
@@ -274,7 +267,7 @@ def test_crear_con_aleat_conex_no_tupla(aleat_conex):
     with pytest.raises(TypeError):
         RedDeNeuronas({"rs": 2, "fs": 2}, conexiones=6, aleat_conex=aleat_conex, semilla=10)
 
-@pytest.mark.parametrize("aleat_conex", [(0.5,), (0.5, 0.5, 0.5), (-0.1, 0.5), (0.5, 1.1)])
+@pytest.mark.parametrize("aleat_conex", [(0.5,), (0.5, 0.5, 0.5), (-0.1, 0.5)])
 def test_crear_con_aleat_conex_invalido(aleat_conex):
     with pytest.raises(ValueError):
         RedDeNeuronas({"rs": 2, "fs": 2}, conexiones=6, aleat_conex=aleat_conex, semilla=10)

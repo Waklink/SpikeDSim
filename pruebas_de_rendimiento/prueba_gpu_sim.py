@@ -45,7 +45,7 @@ def medir(texto):
     print(f"\nRAM después de inicializar historiales: {ram():.6f} MB")
     print(f"GPU después de inicializar historiales: {pool.used_bytes() / 1024**2:.6f} MB, {pool.total_bytes() / 1024**2:.6f} MB\n")
 
-    sim.simular(PASOS, corriente, mostrar_progreso=True)
+    sim.simular(PASOS, corriente, mostrar_progreso=True, medir_rendimiento=True)
         
     print(f"\nRAM final: {ram():.6f} MB")
     print(f"GPU final: {pool.used_bytes() / 1024**2:.6f} MB, {pool.total_bytes() / 1024**2:.6f} MB")

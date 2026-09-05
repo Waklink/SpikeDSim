@@ -233,10 +233,6 @@ class RedDeNeuronas:
             Si es None, se utiliza (1, 1) cuando se generan conexiones aleatorias y None en cualquier
             otro caso.
 
-            Los valores deben estar en el intervalo (0, 1]. Un valor de 1 permite generar pesos en
-            todo el rango posible de la conexión correspondiente, mientras que valores menores reducen
-            su magnitud máxima, no pudiendo ser 0, ya que eso implicaría que no existen conexiones.
-
         Raises
         ------
         TypeError
@@ -845,7 +841,7 @@ class RedDeNeuronas:
             Si conexiones no es ningún tipo aceptado.
 
         ValueError
-            Si aleat_conex no tiene dos elementos, o alguno de ellos no está en el intervalo (0, 1].
+            Si aleat_conex no tiene dos elementos, o alguno de ellos no es mayor que 0.
         """
         # Matriz aleatoria con número de conexiones especificado
         if isinstance(conexiones, int):
@@ -858,8 +854,8 @@ class RedDeNeuronas:
             if len(self.__aleat_conex) != 2:
                 raise ValueError("aleat_conex tiene que tener dos elementos.")
 
-            if not all(0 < elem <= 1 for elem in self.__aleat_conex):
-                raise ValueError("Los elementos de aleat_conex tienen que estar en el intervalo (0, 1].")
+            if not all(elem > 0 for elem in self.__aleat_conex):
+                raise ValueError("Los elementos de aleat_conex tienen que ser mayores que 0.")
 
             self._crear_conexiones_aleatorias(conexiones)
 
@@ -1026,21 +1022,12 @@ class RedDeNeuronas:
         ValueError
             - Si las dimensiones de la matriz son incorrectas.
             - Si la diagonal principal de la matriz no es 0.
-            - Si alguno de los pesos está fuera del intervalo [-1, 1]
         """
         if self.__conexiones.shape != (self.__num_neuronas, self.__num_neuronas):
             raise ValueError("Dimensiones incorrectas de la matriz de conexiones.")
 
         if self.__xp.any(self.__conexiones.diagonal()):
             raise ValueError("La diagonal de la matriz de conexiones debe ser cero.")
-
-        if self.__sparse:
-            datos = self.__conexiones.data
-        else:
-            datos = self.__conexiones
-
-        if self.__xp.any((datos < -1) | (datos > 1)):
-            raise ValueError("Los pesos de las conexiones deben estar en el intervalo [-1, 1].")
 
     def _actualizar(self, I: Array | float, dt: float) -> Array:
         """
