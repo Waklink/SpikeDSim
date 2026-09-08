@@ -573,12 +573,12 @@ class Simulador:
                         I_actual = float(I_actual[0])
 
                     # Avanzar un paso en la simulación.
-                    spike_actual = red._actualizar(I_actual, dt)
+                    spikes_actual = red._actualizar(I_actual, dt)
 
                     # Obtener el nuevo estado
                     v_actual, u_actual = red._estado()
 
-                    historial_spikes[paso_actual] = spike_actual
+                    historial_spikes[paso_actual] = spikes_actual
                     historial_v[paso_actual] = v_actual
                     historial_u[paso_actual] = u_actual
                     historial_I[paso_actual] = I_actual
