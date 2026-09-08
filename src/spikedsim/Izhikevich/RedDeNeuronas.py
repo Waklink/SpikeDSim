@@ -1060,13 +1060,12 @@ class RedDeNeuronas:
         Este método está destinado al uso interno de la librería cuando los parámetros ya han sido
         validados previamente.
         """
-        spikes_previos = (self.__v >= 30)
         v = self.__v
         u = self.__u
+        spikes_previos = (v >= 30)
 
-        if spikes_previos.any():
-            v[spikes_previos] = self.__c[spikes_previos]
-            u[spikes_previos] += self.__d[spikes_previos]
+        v[:] = self.__xp.where(spikes_previos, self.__c, v)
+        u[:] = self.__xp.where(spikes_previos, u + self.__d, u)
 
         if self.__num_conexiones == 0:
             I_total = I
@@ -1081,7 +1080,7 @@ class RedDeNeuronas:
         u += dt * (self.__a * (self.__b * v - u))
 
         spikes_actuales = (v >= 30)
-        v[spikes_actuales] = self.__dtype(30)
+        self.__xp.minimum(v, self.__dtype(30), out=v)
 
         return spikes_actuales
 
