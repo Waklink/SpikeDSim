@@ -9,3 +9,6 @@ __pycache__/
 
 # Metadatos generados por setuptools
 src/spikedsim.egg-info/
+
+# Archivos generados por line_profiler
+*.py.lprof
