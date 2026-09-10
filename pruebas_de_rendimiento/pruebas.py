@@ -33,7 +33,7 @@ CONFIGURACIONES_PRUEBAS = [
     {"ids": (1,   2),   "parametros_red": {"neuronas": N_EXC,                      "conexiones": None},     "num_neuronas": 1,     "densidad_conexiones": None},
     {"ids": (3,   18),  "parametros_red": {"neuronas": {N_EXC: 1},                 "conexiones": 0},        "num_neuronas": 1,     "densidad_conexiones": 0},
     {"ids": (19,  34),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 0},        "num_neuronas": 10,    "densidad_conexiones": 0},
-    {"ids": (34,  50),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 45},       "num_neuronas": 10,    "densidad_conexiones": 0.5},
+    {"ids": (35,  50),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 45},       "num_neuronas": 10,    "densidad_conexiones": 0.5},
     {"ids": (51,  66),  "parametros_red": {"neuronas": {N_EXC: 8, N_INH: 2},       "conexiones": 90},       "num_neuronas": 10,    "densidad_conexiones": 1},
     {"ids": (67,  82),  "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 0},        "num_neuronas": 100,   "densidad_conexiones": 0},
     {"ids": (83,  98),  "parametros_red": {"neuronas": {N_EXC: 80, N_INH: 20},     "conexiones": 990},      "num_neuronas": 100,   "densidad_conexiones": 0.1},
