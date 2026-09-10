@@ -54,7 +54,7 @@ CONFIGURACIONES_PRUEBAS = [
 
 def ejecutar_neurona(queue, neurona, corriente, param_sim):
     simulador = Simulador(1)
-    simulador.cargar_neurona(neurona)
+    simulador.cargar_red(neurona)
 
     _simular_y_obtener_resultados(simulador, queue, corriente, param_sim)
 
