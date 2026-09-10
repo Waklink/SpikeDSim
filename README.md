@@ -1,9 +1,8 @@
 # SpikeDSim
 
-SpikeDSim es una librería desarrollada en Python para la simulación de redes
-neuronales de disparo (Spiking Neural Networks, SNN). El proyecto proporciona
-herramientas para definir neuronas y redes neuronales, ejecutar simulaciones y
-visualizar los resultados obtenidos.
+SpikeDSim es una librería desarrollada en Python para la simulación de redes de
+neuronas biológicas. El proyecto proporciona herramientas para definir neuronas
+y redes neuronales, ejecutar simulaciones y visualizar los resultados obtenidos.
 
 La librería está basada en el modelo neuronal de Izhikevich (2003) y permite
 simular tanto neuronas individuales como redes de neuronas. Además, incluye
