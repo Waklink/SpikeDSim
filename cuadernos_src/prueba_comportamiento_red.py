@@ -68,5 +68,5 @@ vis.cargar_historial(historial=sim.historial)
 # Mostrar el raster plot y la evolución del potencial de emebrana de una neurona
 _ = vis.raster_plot()
 # n = rng.randint(0, NUM_NEURONAS + 1)
-n = 100
-_ = vis.potencial_membrana(neuronas=n)
+n = 1
+_ = vis.potencial_membrana(neuronas=n, figsize=(10, 3), titulo=f"{sim.red.nombre[1]}: {n}", max_etiquetas_leyenda=0)

@@ -307,7 +307,7 @@ class Visualizar:
                 ax.axhline(separacion, linestyle="--", linewidth=1)
 
             for etiqueta, posicion in etiquetas_tipo.items():
-                ax.text(-0.15, posicion, etiqueta, transform=ax.get_yaxis_transform(),
+                ax.text(-0.08, posicion, etiqueta, transform=ax.get_yaxis_transform(),
                                rotation=90, va="center", ha="right")
 
         fig.tight_layout()
